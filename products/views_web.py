@@ -134,7 +134,11 @@ def upload_product(request, pk):
                 product.hood_item_id = result.get('item_id', '')
                 product.save()
                 
-                messages.success(request, f'Продукт успешно загружен на Hood.de! ID: {result.get("item_id")}')
+                # Проверяем, существует ли товар уже
+                if result.get('already_exists'):
+                    messages.warning(request, f'Товар уже существует на Hood.de! ID: {result.get("item_id")}')
+                else:
+                    messages.success(request, f'Продукт успешно загружен на Hood.de! ID: {result.get("item_id")}')
             else:
                 messages.error(request, f'Ошибка загрузки: {result.get("error", "Неизвестная ошибка")}')
             

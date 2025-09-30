@@ -357,7 +357,9 @@ class HoodAPIService:
                         message = item_container.find('message')
                         
                         # Определяем успешность на основе статуса
-                        is_success = status.text == 'success' if status is not None else False
+                        # Успех: success, not approved (товар уже существует), или любой статус кроме failed/error
+                        status_text = status.text if status is not None else ''
+                        is_success = status_text in ['success', 'not approved'] or (status_text and status_text not in ['failed', 'error'])
                         
                         # Логируем детали ответа
                         logger.info(f"Upload Status: {status.text if status is not None else 'unknown'}")
@@ -390,6 +392,17 @@ class HoodAPIService:
                             result['costs'] = costs.text  # Для обратной совместимости
                         if message is not None:
                             result['message'] = message.text
+                        
+                        # Проверяем элемент error для дополнительной информации
+                        error_element = item_container.find("error")
+                        if error_element is not None:
+                            result["error"] = error_element.text
+                            result["error_message"] = error_element.text
+                        
+                        # Если товар уже существует (not approved), это тоже успех
+                        if status_text == "not approved":
+                            result["already_exists"] = True
+                            result["message"] = "Товар уже существует на Hood.de"
                         
                         return result
                     else:
