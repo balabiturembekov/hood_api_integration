@@ -9,6 +9,14 @@ from .services import HoodAPIService
 import json
 
 
+def public_home(request):
+    """Публичная главная страница (доступна без логина)"""
+    return render(request, 'products/public_home.html', {
+        'title': 'Hood.de Integration Service',
+        'description': 'Сервис интеграции с Hood.de для управления товарами'
+    })
+
+
 @login_required
 def dashboard(request):
     """Главная страница дашборда"""

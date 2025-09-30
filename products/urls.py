@@ -14,7 +14,8 @@ urlpatterns = [
     path('api/', include(router.urls)),
     
     # Веб-интерфейс маршруты
-    path('', views_web.dashboard, name='dashboard'),
+    path('', views_web.public_home, name='public_home'),
+    path('dashboard/', views_web.dashboard, name='dashboard'),
     path('products/', views_web.products_list, name='products_list'),
     path('products/<int:pk>/', views_web.product_detail, name='product_detail'),
     path('products/<int:pk>/upload/', views_web.upload_product, name='upload_product'),
