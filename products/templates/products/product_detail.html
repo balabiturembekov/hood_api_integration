@@ -1,0 +1,352 @@
+{% extends 'products/base.html' %}
+
+{% block title %}{{ product.title }} - Hood.de Integration Service{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-box"></i> {{ product.title }}</h1>
+    <div>
+        <a href="{% url 'products_list' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Назад к списку
+        </a>
+        <a href="/admin/products/product/{{ product.pk }}/change/" class="btn btn-outline-primary" target="_blank">
+            <i class="fas fa-edit"></i> Редактировать
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Основная информация -->
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Основная информация</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <td><strong>Название:</strong></td>
+                                <td>{{ product.title }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Цена:</strong></td>
+                                <td>
+                                    <span class="h5 text-primary">{{ product.price }} €</span>
+                                    {% if product.list_price and product.list_price != product.price %}
+                                        <br><small class="text-muted text-decoration-line-through">{{ product.list_price }} €</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Состояние:</strong></td>
+                                <td>
+                                    <span class="badge bg-{% if product.condition == 'new' %}success{% else %}warning{% endif %}">
+                                        {{ product.get_condition_display }}
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><strong>Количество:</strong></td>
+                                <td>{{ product.quantity }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Режим товара:</strong></td>
+                                <td>{{ product.get_item_mode_display }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            {% if product.ean %}
+                            <tr>
+                                <td><strong>EAN:</strong></td>
+                                <td><code>{{ product.ean }}</code></td>
+                            </tr>
+                            {% endif %}
+                            {% if product.mpn %}
+                            <tr>
+                                <td><strong>MPN:</strong></td>
+                                <td><code>{{ product.mpn }}</code></td>
+                            </tr>
+                            {% endif %}
+                            {% if product.manufacturer %}
+                            <tr>
+                                <td><strong>Производитель:</strong></td>
+                                <td>{{ product.manufacturer }}</td>
+                            </tr>
+                            {% endif %}
+                            {% if product.item_number %}
+                            <tr>
+                                <td><strong>Номер товара:</strong></td>
+                                <td><code>{{ product.item_number }}</code></td>
+                            </tr>
+                            {% endif %}
+                            {% if product.weight %}
+                            <tr>
+                                <td><strong>Вес:</strong></td>
+                                <td>{{ product.weight }} кг</td>
+                            </tr>
+                            {% endif %}
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Физические характеристики -->
+        {% if product.dimensions or product.material or product.color %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-ruler"></i> Физические характеристики</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% if product.dimensions %}
+                    <div class="col-md-4">
+                        <strong>Размеры:</strong><br>
+                        {{ product.dimensions }}
+                    </div>
+                    {% endif %}
+                    {% if product.material %}
+                    <div class="col-md-4">
+                        <strong>Материал:</strong><br>
+                        {{ product.material }}
+                    </div>
+                    {% endif %}
+                    {% if product.color %}
+                    <div class="col-md-4">
+                        <strong>Цвет:</strong><br>
+                        {{ product.color }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Описание -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-align-left"></i> Описание</h5>
+            </div>
+            <div class="card-body">
+                {% if product.html_description %}
+                    <div class="border p-3 bg-light">
+                        {{ product.html_description|safe }}
+                    </div>
+                {% else %}
+                    <p>{{ product.description|linebreaks }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Изображения -->
+        {% if product.images %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-images"></i> Изображения</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for image_url in product.images %}
+                    <div class="col-md-4 mb-3">
+                        <img src="{{ image_url }}" class="img-fluid rounded" alt="Изображение продукта" 
+                             style="max-height: 200px; object-fit: cover;">
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Боковая панель -->
+    <div class="col-md-4">
+        <!-- Статус загрузки -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-upload"></i> Статус загрузки</h5>
+            </div>
+            <div class="card-body">
+                {% if product.is_uploaded_to_hood %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i> <strong>Загружен на Hood.de</strong>
+                        {% if product.hood_item_id %}
+                            <br><small>ID товара: <code>{{ product.hood_item_id }}</code></small>
+                        {% endif %}
+                        {% if product.uploaded_at %}
+                            <br><small>Дата загрузки: {{ product.uploaded_at|date:"d.m.Y H:i" }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <a href="{% url 'delete_product' product.pk %}" class="btn btn-danger w-100">
+                                <i class="fas fa-trash-alt"></i> Удалить с Hood.de
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <form method="post" action="{% url 'upload_product' product.pk %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-warning w-100" 
+                                        onclick="return confirm('Обновить продукт на Hood.de?')">
+                                    <i class="fas fa-sync"></i> Обновить
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-clock"></i> <strong>Ожидает загрузки</strong>
+                    </div>
+                    <form method="post" action="{% url 'upload_product' product.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-success w-100" 
+                                onclick="return confirm('Загрузить продукт на Hood.de?')">
+                            <i class="fas fa-upload"></i> Загрузить на Hood.de
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Категория -->
+        {% if product.hood_category %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-folder"></i> Категория Hood.de</h5>
+            </div>
+            <div class="card-body">
+                <strong>{{ product.hood_category.name }}</strong>
+                {% if product.hood_category.path %}
+                    <br><small class="text-muted">{{ product.hood_category.path }}</small>
+                {% endif %}
+                <br><small class="text-muted">Уровень: {{ product.hood_category.level }}</small>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Метаданные -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-info"></i> Метаданные</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless">
+                    <tr>
+                        <td><strong>Создан:</strong></td>
+                        <td>{{ product.created_at|date:"d.m.Y H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Обновлен:</strong></td>
+                        <td>{{ product.updated_at|date:"d.m.Y H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Создал:</strong></td>
+                        <td>{{ product.created_by_username }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Статус:</strong></td>
+                        <td>
+                            {% if product.is_approved == 'yes' %}
+                                <span class="badge bg-success">Активен</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Неактивен</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- Быстрые действия -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-bolt"></i> Быстрые действия</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/admin/products/product/{{ product.pk }}/change/" class="btn btn-outline-primary" target="_blank">
+                        <i class="fas fa-edit"></i> Редактировать
+                    </a>
+                    <a href="/admin/products/product/{{ product.pk }}/delete/" class="btn btn-outline-danger" target="_blank">
+                        <i class="fas fa-trash"></i> Удалить
+                    </a>
+                    <a href="/api/products/{{ product.pk }}/" class="btn btn-outline-info" target="_blank">
+                        <i class="fas fa-code"></i> API данные
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Логи загрузки -->
+{% if upload_logs %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-history"></i> История загрузок</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Статус</th>
+                                <th>ID товара</th>
+                                <th>Сообщение</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in upload_logs %}
+                            <tr>
+                                <td>{{ log.created_at|date:"d.m.Y H:i" }}</td>
+                                <td>
+                                    {% if log.status == 'success' %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-check"></i> Успешно
+                                        </span>
+                                    {% elif log.status == 'error' %}
+                                        <span class="badge bg-danger">
+                                            <i class="fas fa-times"></i> Ошибка
+                                        </span>
+                                    {% elif log.status == 'duplicate' %}
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-exclamation-triangle"></i> Дубликат
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-clock"></i> {{ log.get_status_display }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if log.hood_item_id %}
+                                        <code>{{ log.hood_item_id }}</code>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if log.error_message %}
+                                        <small class="text-danger">{{ log.error_message }}</small>
+                                    {% else %}
+                                        <small class="text-success">Загрузка выполнена успешно</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

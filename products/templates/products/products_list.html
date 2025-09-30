@@ -1,0 +1,313 @@
+{% extends 'products/base.html' %}
+
+{% block title %}Продукты - Hood.de Integration Service{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-box"></i> Продукты</h1>
+    <div>
+        <a href="/admin/products/product/add/" class="btn btn-primary" target="_blank">
+            <i class="fas fa-plus"></i> Добавить продукт
+        </a>
+    </div>
+</div>
+
+<!-- Фильтры и поиск -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label for="search" class="form-label">Поиск</label>
+                <input type="text" class="form-control" id="search" name="search" 
+                       value="{{ search_query }}" placeholder="Название, EAN, производитель...">
+            </div>
+            <div class="col-md-3">
+                <label for="category" class="form-label">Категория</label>
+                <select class="form-select" id="category" name="category">
+                    <option value="">Все категории</option>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}" {% if category.id|stringformat:"s" == category_filter %}selected{% endif %}>
+                            {{ category.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Статус</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">Все статусы</option>
+                    <option value="uploaded" {% if status_filter == "uploaded" %}selected{% endif %}>Загружены на Hood.de</option>
+                    <option value="not_uploaded" {% if status_filter == "not_uploaded" %}selected{% endif %}>Не загружены</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="fas fa-search"></i> Поиск
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Статистика -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-primary">{{ page_obj.paginator.count }}</h5>
+                <p class="card-text">Всего продуктов</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success">{{ page_obj.object_list|length }}</h5>
+                <p class="card-text">На странице</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-info">{{ categories|length }}</h5>
+                <p class="card-text">Категорий</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-warning">{{ page_obj.number }}</h5>
+                <p class="card-text">Страница</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список продуктов -->
+<div class="row">
+    {% for product in page_obj %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card product-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="card-title">{{ product.title|truncatechars:50 }}</h6>
+                    <div>
+                        {% if product.is_uploaded_to_hood %}
+                            <span class="badge bg-success status-badge">
+                                <i class="fas fa-check"></i> Загружен
+                            </span>
+                        {% else %}
+                            <span class="badge bg-warning status-badge">
+                                <i class="fas fa-clock"></i> Ожидает
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="mb-2">
+                    <strong class="text-primary">{{ product.price }} €</strong>
+                    {% if product.list_price and product.list_price != product.price %}
+                        <small class="text-muted text-decoration-line-through">{{ product.list_price }} €</small>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-2">
+                    <small class="text-muted">
+                        <i class="fas fa-tag"></i> {{ product.get_condition_display }}
+                        {% if product.hood_category_name %}
+                            <br><i class="fas fa-folder"></i> {{ product.hood_category_name }}
+                        {% endif %}
+                    </small>
+                </div>
+                
+                {% if product.ean %}
+                <div class="mb-2">
+                    <small class="text-muted">
+                        <i class="fas fa-barcode"></i> EAN: {{ product.ean }}
+                    </small>
+                </div>
+                {% endif %}
+                
+                <div class="mb-3">
+                    <small class="text-muted">
+                        <i class="fas fa-user"></i> {{ product.created_by_username }}
+                        <br><i class="fas fa-calendar"></i> {{ product.created_at|date:"d.m.Y" }}
+                    </small>
+                </div>
+            </div>
+            
+            <div class="card-footer bg-transparent">
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'product_detail' product.pk %}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-eye"></i> Подробнее
+                    </a>
+                    {% if not product.is_uploaded_to_hood %}
+                        <form method="post" action="{% url 'upload_product' product.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-success btn-sm" 
+                                    onclick="return confirm('Загрузить продукт на Hood.de?')">
+                                <i class="fas fa-upload"></i> Загрузить
+                            </button>
+                        </form>
+                    {% else %}
+                        <span class="badge bg-success">
+                            <i class="fas fa-check"></i> ID: {{ product.hood_item_id }}
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle"></i> Продукты не найдены
+            {% if search_query or category_filter or status_filter %}
+                <br>Попробуйте изменить параметры поиска
+            {% else %}
+                <br><a href="/admin/products/product/add/" target="_blank">Добавить первый продукт</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Пагинация -->
+{% if page_obj.has_other_pages %}
+<nav aria-label="Навигация по страницам">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+        {% endif %}
+        
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+                <li class="page-item active">
+                    <span class="page-link">{{ num }}</span>
+                </li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">{{ num }}</a>
+                </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Массовые действия -->
+{% if page_obj.object_list %}
+<div class="card mt-4">
+    <div class="card-header">
+        <h5><i class="fas fa-bolt"></i> Массовые действия</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" action="{% url 'bulk_upload' %}" id="bulkUploadForm">
+            {% csrf_token %}
+            <div class="row">
+                <div class="col-md-6">
+                    <label for="bulkName" class="form-label">Название массовой загрузки</label>
+                    <input type="text" class="form-control" id="bulkName" name="name" 
+                           placeholder="Например: Загрузка мебели" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Выберите продукты</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAll">
+                        <label class="form-check-label" for="selectAll">
+                            Выбрать все на странице
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary" id="bulkUploadBtn" disabled>
+                    <i class="fas fa-upload"></i> Загрузить выбранные продукты
+                </button>
+                <small class="text-muted ms-2">Выберите продукты для массовой загрузки</small>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Выбор всех продуктов
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const productCheckboxes = document.querySelectorAll('input[name="product_ids"]');
+    const bulkUploadBtn = document.getElementById('bulkUploadBtn');
+    
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            productCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateBulkUploadButton();
+        });
+    }
+    
+    // Обновление кнопки массовой загрузки
+    function updateBulkUploadButton() {
+        const checkedBoxes = document.querySelectorAll('input[name="product_ids"]:checked');
+        bulkUploadBtn.disabled = checkedBoxes.length === 0;
+        bulkUploadBtn.textContent = checkedBoxes.length > 0 
+            ? `Загрузить ${checkedBoxes.length} продуктов` 
+            : 'Загрузить выбранные продукты';
+    }
+    
+    // Добавляем чекбоксы к продуктам
+    const productCards = document.querySelectorAll('.product-card');
+    productCards.forEach((card, index) => {
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = 'product_ids';
+        checkbox.value = card.querySelector('a[href*="/products/"]').href.match(/\/(\d+)\//)[1];
+        checkbox.className = 'form-check-input me-2';
+        
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        label.appendChild(checkbox);
+        label.appendChild(document.createTextNode('Выбрать'));
+        
+        const formCheck = document.createElement('div');
+        formCheck.className = 'form-check';
+        formCheck.appendChild(label);
+        
+        card.querySelector('.card-footer').prepend(formCheck);
+        
+        checkbox.addEventListener('change', updateBulkUploadButton);
+    });
+});
+</script>
+{% endblock %}

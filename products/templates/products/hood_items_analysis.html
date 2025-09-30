@@ -1,0 +1,366 @@
+{% extends 'products/base.html' %}
+
+{% block title %}Анализ товаров Hood.de - Hood.de Integration Service{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-chart-bar"></i> Анализ товаров Hood.de</h2>
+    <div class="btn-group" role="group">
+        <a href="{% url 'hood_items_list' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Назад к списку
+        </a>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline-primary">
+            <i class="fas fa-home"></i> Дашборд
+        </a>
+    </div>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-filter"></i> Параметры анализа</h5>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="type" class="form-label">Тип анализа</label>
+                <select name="type" id="type" class="form-select">
+                    {% for analysis_type in analysis_types %}
+                        <option value="{{ analysis_type.value }}" {% if analysis_type.value == analysis_type %}selected{% endif %}>
+                            {{ analysis_type.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Статус товаров</label>
+                <select name="status" id="status" class="form-select">
+                    {% for status in statuses %}
+                        <option value="{{ status.value }}" {% if status.value == current_status %}selected{% endif %}>
+                            {{ status.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="days" class="form-label">Дней назад</label>
+                <input type="number" name="days" id="days" class="form-control" value="{{ days }}" min="1" max="365">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary d-block w-100">
+                    <i class="fas fa-search"></i> Анализировать
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Результаты анализа -->
+{% if analysis_data %}
+
+<!-- Сводка -->
+{% if analysis_type == 'summary' %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.total_items|default:0 }}</h3>
+                <p class="mb-0">Всего товаров</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.returned_items|default:0 }}</h3>
+                <p class="mb-0">Возвращено</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.item_ids|length|default:0 }}</h3>
+                <p class="mb-0">ID товаров</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.record_sets|length|default:0 }}</h3>
+                <p class="mb-0">Record Sets</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-list"></i> ID товаров</h5>
+    </div>
+    <div class="card-body">
+        {% if analysis_data.item_ids %}
+            <div class="row">
+                {% for item_id in analysis_data.item_ids %}
+                <div class="col-md-3 col-sm-6 mb-2">
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-secondary me-2">{{ forloop.counter }}</span>
+                        <a href="{% url 'hood_item_status' item_id %}" class="text-decoration-none">
+                            {{ item_id }}
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted">ID товаров не найдены</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Товары за последние дни -->
+{% elif analysis_type == 'recent' %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.total_records|default:0 }}</h3>
+                <p class="mb-0">Всего товаров за {{ days }} дней</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.items|length|default:0 }}</h3>
+                <p class="mb-0">Возвращено товаров</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if analysis_data.items %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-clock"></i> Товары за последние {{ days }} дней</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for item in analysis_data.items %}
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="card-title">{{ item.itemID|default:'N/A' }}</h6>
+                        <p class="card-text">
+                            <small class="text-muted">RecordSet: {{ item.recordSet|default:'N/A' }}</small>
+                        </p>
+                        <a href="{% url 'hood_item_status' item.itemID %}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-eye"></i> Подробнее
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Детальный анализ -->
+{% elif analysis_type == 'detailed' %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.total_items|default:0 }}</h3>
+                <p class="mb-0">Всего товаров</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.items_with_images|default:0 }}</h3>
+                <p class="mb-0">С изображениями</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.items_with_descriptions|default:0 }}</h3>
+                <p class="mb-0">С описанием</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3>{{ analysis_data.items_with_properties|default:0 }}</h3>
+                <p class="mb-0">Со свойствами</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Анализ по статусам -->
+{% if analysis_data.items_by_status %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Распределение по статусам</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for status, count in analysis_data.items_by_status.items %}
+            <div class="col-md-4 col-sm-6 mb-2">
+                <div class="d-flex justify-content-between align-items-center p-2 border rounded">
+                    <span>{{ status|default:'Неизвестно' }}</span>
+                    <span class="badge bg-primary">{{ count }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Анализ по состояниям -->
+{% if analysis_data.items_by_condition %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-tags"></i> Распределение по состояниям</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for condition, count in analysis_data.items_by_condition.items %}
+            <div class="col-md-4 col-sm-6 mb-2">
+                <div class="d-flex justify-content-between align-items-center p-2 border rounded">
+                    <span>{{ condition|default:'Неизвестно' }}</span>
+                    <span class="badge bg-info">{{ count }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Анализ по категориям -->
+{% if analysis_data.items_by_category %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-folder"></i> Распределение по категориям</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for category, count in analysis_data.items_by_category.items %}
+            <div class="col-md-6 col-lg-4 mb-2">
+                <div class="d-flex justify-content-between align-items-center p-2 border rounded">
+                    <span class="text-truncate" title="{{ category|default:'Неизвестно' }}">
+                        {{ category|default:'Неизвестно' }}
+                    </span>
+                    <span class="badge bg-success">{{ count }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Анализ цен -->
+{% if analysis_data.price_range.min is not None %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-euro-sign"></i> Анализ цен</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <div class="text-center p-3 border rounded">
+                    <h4 class="text-success">{{ analysis_data.price_range.min|floatformat:2 }} €</h4>
+                    <p class="mb-0">Минимальная цена</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3 border rounded">
+                    <h4 class="text-primary">{{ analysis_data.price_range.max|floatformat:2 }} €</h4>
+                    <p class="mb-0">Максимальная цена</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="text-center p-3 border rounded">
+                    <h4 class="text-info">{{ analysis_data.price_range.avg|floatformat:2 }} €</h4>
+                    <p class="mb-0">Средняя цена</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Детальная информация о товарах -->
+{% if analysis_data.items %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-list"></i> Детальная информация о товарах</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for item in analysis_data.items %}
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="card-title">{{ item.itemName|default:item.itemID|default:'N/A' }}</h6>
+                        <p class="card-text">
+                            <small class="text-muted">
+                                ID: {{ item.itemID|default:'N/A' }}<br>
+                                Цена: {{ item.price|default:'N/A' }}<br>
+                                Состояние: {{ item.condition|default:'N/A' }}<br>
+                                Статус: {{ item.status|default:'N/A' }}
+                            </small>
+                        </p>
+                        <a href="{% url 'hood_item_status' item.itemID %}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-eye"></i> Подробнее
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+{% else %}
+<div class="alert alert-info" role="alert">
+    <h4 class="alert-heading"><i class="fas fa-info-circle"></i> Данные для анализа не найдены</h4>
+    <p>Выберите параметры анализа и нажмите кнопку "Анализировать" для получения результатов.</p>
+    <hr>
+    <p class="mb-0">
+        <a href="{% url 'hood_items_list' %}" class="btn btn-primary">
+            <i class="fas fa-list"></i> Перейти к списку товаров
+        </a>
+    </p>
+</div>
+{% endif %}
+
+<script>
+// Автоматическое обновление при изменении типа анализа
+document.getElementById('type').addEventListener('change', function() {
+    if (this.value === 'detailed') {
+        alert('Для детального анализа необходимо выбрать товары в списке товаров');
+    }
+    this.form.submit();
+});
+
+// Автоматическое обновление при изменении статуса
+document.getElementById('status').addEventListener('change', function() {
+    this.form.submit();
+});
+</script>
+{% endblock %}

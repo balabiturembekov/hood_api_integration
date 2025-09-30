@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    expose:
+      - "8000"
+    environment:
+      - DJANGO_ENV=production
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-change-me-in-production}
+      - ALLOWED_HOSTS=hood.automatonsoft.de,www.hood.automatonsoft.de,localhost,127.0.0.1
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-password}@db:5432/hood_integration
+      - REDIS_URL=redis://redis:6379/0
+      - HOOD_API_USERNAME=${HOOD_API_USERNAME:-jvmoebel_de}
+      - HOOD_API_PASSWORD=${HOOD_API_PASSWORD:-P@$$w0rd2025!}
+      - HOOD_ACCOUNT_NAME=${HOOD_ACCOUNT_NAME:-jvmoebel_de}
+      - HOOD_ACCOUNT_PASS=${HOOD_ACCOUNT_PASS:-P@$$w0rd2025!}
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=hood_integration
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8282:80"
+    volumes:
+      - ./nginx-docker.conf:/etc/nginx/conf.d/default.conf
+      - static_volume:/var/www/static
+      - media_volume:/var/www/media
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_volume:
+  media_volume:
