@@ -388,10 +388,16 @@ class HoodAPIService:
                             result['message'] = message.text
                         
                         return result
+                    else:
+                        return {
+                            'success': False,
+                            'error': 'Не удалось найти элемент item в ответе API',
+                            'raw_response': response.text
+                        }
                 else:
-                    result = {
+                    return {
                         'success': False,
-                        'error': 'Не удалось найти элемент item в ответе API',
+                        'error': 'Не удалось найти элемент response в ответе API',
                         'raw_response': response.text
                     }
             else:
@@ -401,15 +407,11 @@ class HoodAPIService:
                     'raw_response': response.text
                 }
             
-            return result
-            
-        except requests.RequestException as e:
-            logger.error(f"Hood API Request Error: {str(e)}")
-            return {
-                'success': False,
-                'error': f'Ошибка запроса: {str(e)}',
-                'raw_response': ''
-            }
+                return {
+                    "success": False,
+                    "error": "Не удалось распарсить XML ответ от API",
+                    "raw_response": response.text
+                }
         except Exception as e:
             logger.error(f"Hood API Unexpected Error: {str(e)}")
             return {
