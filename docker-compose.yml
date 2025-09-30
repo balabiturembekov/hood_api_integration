@@ -10,7 +10,7 @@ services:
       - DEBUG=False
       - SECRET_KEY=${SECRET_KEY:-django-insecure-change-me-in-production}
       - ALLOWED_HOSTS=hood.automatonsoft.de,www.hood.automatonsoft.de,localhost,127.0.0.1
-      - CSRF_TRUSTED_ORIGINS=https://hood.automatonsoft.de,https://www.hood.automatonsoft.de,http://localhost:8000,http://127.0.0.1:8000
+      - CSRF_TRUSTED_ORIGINS=https://hood.automatonsoft.de,https://www.hood.automatonsoft.de,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8282,http://127.0.0.1:8282
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-password}@db:5432/hood_integration
       - REDIS_URL=redis://redis:6379/0
       - HOOD_API_USERNAME=${HOOD_API_USERNAME:-jvmoebel_de}
