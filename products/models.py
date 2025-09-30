@@ -396,7 +396,7 @@ class Product(models.Model):
             'deficiencyDescription': self.deficiency_description,
             'warrantyShortenedFlag': self.warranty_shortened_flag,
             'noIdentifierFlag': self.no_identifier_flag,
-            'images': self.images,
+            'images': self.images if isinstance(self.images, list) else [],
         }
 
 

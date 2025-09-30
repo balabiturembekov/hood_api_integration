@@ -27,7 +27,7 @@ RUN chown -R app:app /app
 USER app
 
 # Создаем директории для статических файлов
-RUN mkdir -p /app/staticfiles /app/media
+RUN mkdir -p /app/staticfiles /app/media /app/static
 
 # Открываем порт
 EXPOSE 8000
