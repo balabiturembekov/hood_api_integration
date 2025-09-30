@@ -147,3 +147,9 @@ CSRF_TRUSTED_ORIGINS = [
 LOGIN_URL = '/admin/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/'
+
+# Hood.de API settings
+HOOD_API_USERNAME = 'jvmoebel_de'
+HOOD_API_PASSWORD = 'P@$$w0rd2025!'
+HOOD_ACCOUNT_NAME = 'jvmoebel_de'
+HOOD_ACCOUNT_PASS = 'P@$$w0rd2025!'
