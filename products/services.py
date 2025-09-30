@@ -314,6 +314,7 @@ class HoodAPIService:
             
             logger.info(f"Hood API Response Status: {response.status_code}")
             logger.info(f"Hood API Response Content: {response.text[:500]}...")
+            logger.info(f"Hood API Full Response: {response.text}")
             
             # Парсинг ответа
             root = self._parse_xml_safely(response.text)
@@ -406,6 +407,8 @@ class HoodAPIService:
                         
                         return result
                     else:
+                        logger.error("item_container не найден в ответе API")
+                        logger.error(f"response_container содержимое: {ET.tostring(response_container, encoding='unicode')}")
                         return {
                             'success': False,
                             'error': 'Не удалось найти элемент item в ответе API',
