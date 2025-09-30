@@ -337,14 +337,19 @@ class HoodAPIService:
                     response_container = root.find('.//response')
                 
                 if response_container is not None:
-                    # Ищем элемент items в response, затем item внутри items
-                    items_container = response_container.find('items')
-                    if items_container is not None:
-                        item_container = items_container.find('item')
-                        logger.info("Найден контейнер 'items', ищем 'item' внутри")
+                    # Согласно диагностике, API возвращает item напрямую в response
+                    # Сначала ищем item напрямую в response (основной случай)
+                    item_container = response_container.find('item')
+                    if item_container is not None:
+                        logger.info("Найден элемент 'item' напрямую в response")
                     else:
-                        item_container = response_container.find('item')
-                        logger.info("Контейнер 'items' не найден, ищем 'item' напрямую в response")
+                        # Если не найден, ищем внутри items (для обратной совместимости)
+                        items_container = response_container.find('items')
+                        if items_container is not None:
+                            item_container = items_container.find('item')
+                            logger.info("Найден элемент 'item' внутри контейнера 'items'")
+                        else:
+                            logger.info("Элемент 'item' не найден ни в response, ни в items")
                     
                     logger.info(f"item_container найден: {item_container is not None}")
                     
