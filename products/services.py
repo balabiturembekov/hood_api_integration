@@ -307,7 +307,7 @@ class HoodAPIService:
             
             response = self.session.post(
                 self.api_url,
-                data=xml_request,
+                data=xml_request.encode('utf-8'),
                 headers={'Content-Type': 'text/xml; charset=UTF-8'},
                 timeout=30
             )
