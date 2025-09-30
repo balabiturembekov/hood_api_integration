@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Скрипт деплоя для hood.automatonsoft.de
+# Скрипт деплоя для hood.automatonsoft.de с Docker
 # Использование: ./deploy.sh
 
 set -e
@@ -9,76 +9,11 @@ echo "🚀 НАЧАЛО ДЕПЛОЯ HOOD.DE INTEGRATION SERVICE"
 echo "=============================================="
 
 # Переменные
-PROJECT_NAME="hood_integration"
 PROJECT_DIR="/var/www/hood.automatonsoft.de"
-VENV_DIR="/var/www/hood.automatonsoft.de/venv"
-REPO_URL="https://github.com/your-repo/hood-integration-service.git"
 
-# Создаем директории
-echo "📁 Создание директорий..."
-sudo mkdir -p $PROJECT_DIR
-sudo mkdir -p $PROJECT_DIR/static
-sudo mkdir -p $PROJECT_DIR/media
-sudo mkdir -p $PROJECT_DIR/logs
-sudo mkdir -p /var/log/hood_integration
-
-# Клонируем репозиторий (если первый раз)
-if [ ! -d "$PROJECT_DIR/.git" ]; then
-    echo "📥 Клонирование репозитория..."
-    if [ -d "$PROJECT_DIR" ] && [ "$(ls -A $PROJECT_DIR)" ]; then
-        echo "⚠️  Директория $PROJECT_DIR не пустая. Создаем резервную копию..."
-        sudo mv $PROJECT_DIR ${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)
-    fi
-    sudo git clone $REPO_URL $PROJECT_DIR
-else
-    echo "📥 Обновление существующего репозитория..."
-    cd $PROJECT_DIR
-    sudo git pull origin main
-fi
-
-# Переходим в директорию проекта
+# Переходим в директорию проекта (проект уже загружен на сервер)
+echo "📁 Переход в директорию проекта..."
 cd $PROJECT_DIR
-
-# Создаем виртуальное окружение (если не существует)
-if [ ! -d "$VENV_DIR" ]; then
-    echo "🐍 Создание виртуального окружения..."
-    sudo python3 -m venv $VENV_DIR
-fi
-
-# Активируем виртуальное окружение
-echo "🔧 Активация виртуального окружения..."
-source $VENV_DIR/bin/activate
-
-# Устанавливаем зависимости
-echo "📦 Установка зависимостей..."
-pip install -r requirements.txt
-
-# Копируем .env файл
-if [ ! -f "$PROJECT_DIR/.env" ]; then
-    echo "⚙️ Создание .env файла..."
-    sudo cp .env.example .env
-    echo "⚠️  Не забудьте настроить .env файл!"
-fi
-
-# Собираем статические файлы
-echo "📄 Сбор статических файлов..."
-python manage.py collectstatic --noinput
-
-# Применяем миграции
-echo "🗄️ Применение миграций..."
-python manage.py migrate
-
-# Создаем суперпользователя (если не существует)
-echo "👤 Создание суперпользователя..."
-python manage.py shell -c "
-from django.contrib.auth import get_user_model
-User = get_user_model()
-if not User.objects.filter(username='admin').exists():
-    User.objects.create_superuser('admin', 'admin@automatonsoft.de', 'admin123')
-    print('Суперпользователь создан')
-else:
-    print('Суперпользователь уже существует')
-"
 
 # Настройка переменных окружения
 echo "🔧 Настройка переменных окружения..."
@@ -124,3 +59,9 @@ sudo systemctl status nginx --no-pager -l
 echo "🎉 ДЕПЛОЙ ЗАВЕРШЕН!"
 echo "🌐 Сайт доступен по адресу: https://hood.automatonsoft.de"
 echo "👨‍💼 Админка: https://hood.automatonsoft.de/admin/"
+echo "🔑 Логин: admin, Пароль: admin123"
+echo ""
+echo "📋 Полезные команды:"
+echo "  docker-compose logs -f          # Просмотр логов"
+echo "  docker-compose restart          # Перезапуск сервисов"
+echo "  docker-compose ps               # Статус контейнеров"
