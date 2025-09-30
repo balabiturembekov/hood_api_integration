@@ -139,6 +139,8 @@ CSRF_TRUSTED_ORIGINS = [
     "https://www.hood.automatonsoft.de",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://localhost:8282",
+    "http://127.0.0.1:8282",
 ]
 
 # Hood.de API settings
