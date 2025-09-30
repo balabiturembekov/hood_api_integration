@@ -340,8 +340,12 @@ class HoodAPIService:
                     items_container = response_container.find('items')
                     if items_container is not None:
                         item_container = items_container.find('item')
+                        logger.info("Найден контейнер 'items', ищем 'item' внутри")
                     else:
                         item_container = response_container.find('item')
+                        logger.info("Контейнер 'items' не найден, ищем 'item' напрямую в response")
+                    
+                    logger.info(f"item_container найден: {item_container is not None}")
                     
                     if item_container is not None:
                         # Извлекаем данные из ответа согласно документации
