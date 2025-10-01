@@ -1014,6 +1014,10 @@ def sync_full_categories(request):
             messages.error(request, f'Ошибка: {str(e)}')
     
     return redirect('dashboard')
+
+
+@login_required
+def import_logs(request):
     """Список логов импорта"""
     logs = ImportLog.objects.all().order_by('-created_at')
     paginator = Paginator(logs, 20)
@@ -1024,9 +1028,6 @@ def sync_full_categories(request):
         'page_obj': page_obj,
         'title': 'Логи импорта'
     })
-    
-    # GET запрос - показываем форму выбора товаров
-    return redirect('hood_items_list')
 
 
 def get_status_display(status):
