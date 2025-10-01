@@ -422,6 +422,40 @@ class Product(models.Model):
         }
 
 
+class ImportLog(models.Model):
+    """Модель для логирования импорта продуктов"""
+    STATUS_CHOICES = [
+        ('pending', 'В процессе'),
+        ('success', 'Успешно'),
+        ('error', 'Ошибка'),
+        ('partial', 'Частично успешно'),
+    ]
+    
+    file_name = models.CharField(max_length=255, verbose_name="Имя файла")
+    total_rows = models.IntegerField(default=0, verbose_name="Всего строк")
+    success_count = models.IntegerField(default=0, verbose_name="Успешно импортировано")
+    error_count = models.IntegerField(default=0, verbose_name="Ошибок")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
+    error_details = models.TextField(blank=True, verbose_name="Детали ошибок")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Создано пользователем")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создано")
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="Завершено")
+    
+    class Meta:
+        verbose_name = "Лог импорта"
+        verbose_name_plural = "Логи импорта"
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Импорт {self.file_name} - {self.get_status_display()}"
+    
+    def get_success_rate(self):
+        """Получить процент успешности импорта"""
+        if self.total_rows == 0:
+            return 0
+        return round((self.success_count / self.total_rows) * 100, 2)
+
+
 class UploadLog(models.Model):
     """Модель для логов загрузки товаров на Hood.de"""
     

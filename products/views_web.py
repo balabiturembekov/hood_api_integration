@@ -5,9 +5,13 @@ from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.db.models import Q
 from .services import HoodAPIService
-from .models import Product, HoodCategory, UploadLog, BulkUpload
+from .models import Product, HoodCategory, UploadLog, BulkUpload, ImportLog
 import json
 import logging
+import csv
+import io
+from django.utils import timezone
+from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
@@ -734,6 +738,205 @@ def hood_items_compare(request):
         }
         
         return render(request, 'products/hood_items_compare.html', context)
+
+
+@login_required
+def import_products(request):
+    """Импорт продуктов из CSV файла"""
+    if request.method == 'POST':
+        try:
+            csv_file = request.FILES.get('csv_file')
+            if not csv_file:
+                return JsonResponse({'success': False, 'error': 'Файл не выбран'})
+            
+            if not csv_file.name.endswith('.csv'):
+                return JsonResponse({'success': False, 'error': 'Файл должен быть в формате CSV'})
+            
+            # Создаем лог импорта
+            import_log = ImportLog.objects.create(
+                file_name=csv_file.name,
+                created_by=request.user,
+                status='pending'
+            )
+            
+            # Читаем CSV файл
+            try:
+                # Декодируем файл как UTF-8
+                file_content = csv_file.read().decode('utf-8')
+                csv_reader = csv.DictReader(io.StringIO(file_content))
+                
+                # Получаем заголовки
+                headers = csv_reader.fieldnames
+                logger.info(f"Заголовки CSV: {headers}")
+                
+                # Маппинг полей CSV на поля модели
+                field_mapping = {
+                    'title': ['title', 'name', 'название', 'товар'],
+                    'description': ['description', 'описание', 'desc'],
+                    'price': ['price', 'цена', 'cost'],
+                    'quantity': ['quantity', 'количество', 'qty'],
+                    'condition': ['condition', 'состояние', 'состояние_товара'],
+                    'manufacturer': ['manufacturer', 'производитель', 'brand'],
+                    'ean': ['ean', 'EAN', 'штрихкод'],
+                    'mpn': ['mpn', 'MPN', 'артикул'],
+                    'weight': ['weight', 'вес', 'масса'],
+                    'category': ['category', 'категория', 'cat'],
+                    'images': ['images', 'изображения', 'фото'],
+                }
+                
+                success_count = 0
+                error_count = 0
+                errors = []
+                
+                # Обрабатываем каждую строку
+                for row_num, row in enumerate(csv_reader, start=2):  # Начинаем с 2, так как 1 - заголовки
+                    try:
+                        # Создаем продукт
+                        product_data = {}
+                        
+                        # Маппим поля
+                        for field_name, csv_headers in field_mapping.items():
+                            for csv_header in csv_headers:
+                                if csv_header in row and row[csv_header]:
+                                    product_data[field_name] = row[csv_header].strip()
+                                    break
+                        
+                        # Валидация обязательных полей
+                        if not product_data.get('title'):
+                            errors.append(f"Строка {row_num}: Отсутствует название товара")
+                            error_count += 1
+                            continue
+                        
+                        if not product_data.get('price'):
+                            errors.append(f"Строка {row_num}: Отсутствует цена")
+                            error_count += 1
+                            continue
+                        
+                        # Обработка цены
+                        try:
+                            price_str = product_data.get('price', '0').replace(',', '.').replace('€', '').replace('$', '').strip()
+                            product_data['price'] = float(price_str)
+                        except ValueError:
+                            errors.append(f"Строка {row_num}: Неверный формат цены: {product_data.get('price')}")
+                            error_count += 1
+                            continue
+                        
+                        # Обработка количества
+                        if product_data.get('quantity'):
+                            try:
+                                product_data['quantity'] = int(product_data['quantity'])
+                            except ValueError:
+                                product_data['quantity'] = 1
+                        else:
+                            product_data['quantity'] = 1
+                        
+                        # Обработка веса
+                        if product_data.get('weight'):
+                            try:
+                                weight_str = product_data['weight'].replace(',', '.').replace('kg', '').replace('кг', '').strip()
+                                product_data['weight'] = float(weight_str)
+                            except ValueError:
+                                product_data['weight'] = None
+                        
+                        # Обработка состояния
+                        condition_map = {
+                            'новый': 'new',
+                            'как новый': 'likeNew',
+                            'очень хорошее': 'veryGood',
+                            'удовлетворительное': 'acceptable',
+                            'восстановленный': 'refurbished',
+                            'с дефектом': 'defect',
+                            'б/у хорошее': 'usedGood',
+                        }
+                        if product_data.get('condition'):
+                            condition_lower = product_data['condition'].lower()
+                            product_data['condition'] = condition_map.get(condition_lower, 'new')
+                        else:
+                            product_data['condition'] = 'new'
+                        
+                        # Обработка изображений
+                        if product_data.get('images'):
+                            # Разделяем изображения по запятой или точке с запятой
+                            images_str = product_data['images']
+                            images_list = [img.strip() for img in images_str.replace(';', ',').split(',') if img.strip()]
+                            product_data['images'] = images_list
+                        
+                        # Создаем продукт
+                        product = Product.objects.create(
+                            title=product_data['title'],
+                            description=product_data.get('description', ''),
+                            price=product_data['price'],
+                            quantity=product_data['quantity'],
+                            condition=product_data['condition'],
+                            manufacturer=product_data.get('manufacturer', ''),
+                            ean=product_data.get('ean', ''),
+                            mpn=product_data.get('mpn', ''),
+                            weight=product_data.get('weight'),
+                            images=product_data.get('images', []),
+                            created_by=request.user
+                        )
+                        
+                        success_count += 1
+                        logger.info(f"Импортирован продукт: {product.title}")
+                        
+                    except Exception as e:
+                        error_msg = f"Строка {row_num}: {str(e)}"
+                        errors.append(error_msg)
+                        error_count += 1
+                        logger.error(f"Ошибка импорта строки {row_num}: {str(e)}")
+                
+                # Обновляем лог импорта
+                import_log.total_rows = success_count + error_count
+                import_log.success_count = success_count
+                import_log.error_count = error_count
+                import_log.error_details = '\n'.join(errors[:50])  # Ограничиваем количество ошибок
+                import_log.completed_at = timezone.now()
+                
+                if error_count == 0:
+                    import_log.status = 'success'
+                elif success_count == 0:
+                    import_log.status = 'error'
+                else:
+                    import_log.status = 'partial'
+                
+                import_log.save()
+                
+                logger.info(f"Импорт завершен: {success_count} успешно, {error_count} ошибок")
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Импорт завершен: {success_count} товаров импортировано, {error_count} ошибок',
+                    'success_count': success_count,
+                    'error_count': error_count,
+                    'total_rows': import_log.total_rows,
+                    'errors': errors[:10]  # Показываем только первые 10 ошибок
+                })
+                
+            except UnicodeDecodeError:
+                return JsonResponse({'success': False, 'error': 'Ошибка кодировки файла. Убедитесь, что файл сохранен в UTF-8'})
+            except Exception as e:
+                logger.error(f"Ошибка чтения CSV файла: {str(e)}")
+                return JsonResponse({'success': False, 'error': f'Ошибка чтения файла: {str(e)}'})
+                
+        except Exception as e:
+            logger.error(f"Ошибка импорта: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Метод не поддерживается'})
+
+
+@login_required
+def import_logs(request):
+    """Список логов импорта"""
+    logs = ImportLog.objects.all().order_by('-created_at')
+    paginator = Paginator(logs, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'products/import_logs.html', {
+        'page_obj': page_obj,
+        'title': 'Логи импорта'
+    })
     
     # GET запрос - показываем форму выбора товаров
     return redirect('hood_items_list')

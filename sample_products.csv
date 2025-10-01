@@ -1,0 +1,11 @@
+title,price,description,quantity,condition,manufacturer,ean,mpn,weight,images
+"Смартфон Samsung Galaxy S21",899.99,"Флагманский смартфон с отличной камерой и производительностью",5,"новый","Samsung","1234567890123","SM-G991B",0.17,"https://example.com/samsung1.jpg,https://example.com/samsung2.jpg"
+"Ноутбук MacBook Pro 13",1299.99,"Профессиональный ноутбук для работы и творчества",3,"как новый","Apple","1234567890124","M1-2020",1.4,"https://example.com/macbook1.jpg"
+"Наушники Sony WH-1000XM4",349.99,"Беспроводные наушники с активным шумоподавлением",8,"очень хорошее","Sony","1234567890125","WH1000XM4",0.25,"https://example.com/sony1.jpg"
+"Планшет iPad Air",599.99,"Универсальный планшет для работы и развлечений",4,"новый","Apple","1234567890126","iPad-Air-4",0.46,"https://example.com/ipad1.jpg"
+"Игровая консоль PlayStation 5",499.99,"Новейшая игровая консоль от Sony",2,"новый","Sony","1234567890127","PS5-Digital",4.5,"https://example.com/ps5-1.jpg,https://example.com/ps5-2.jpg"
+"Умные часы Apple Watch Series 7",399.99,"Умные часы с множеством функций для здоровья",6,"как новый","Apple","1234567890128","Watch-S7",0.04,"https://example.com/watch1.jpg"
+"Камера Canon EOS R5",3899.99,"Профессиональная зеркальная камера",1,"новый","Canon","1234567890129","EOS-R5",0.65,"https://example.com/canon1.jpg"
+"Монитор Dell UltraSharp 27",449.99,"4K монитор для профессиональной работы",3,"очень хорошее","Dell","1234567890130","U2720Q",5.9,"https://example.com/dell1.jpg"
+"Клавиатура Logitech MX Keys",99.99,"Беспроводная клавиатура для продуктивности",10,"новый","Logitech","1234567890131","MX-Keys",0.81,"https://example.com/logitech1.jpg"
+"Мышь Razer DeathAdder V2",69.99,"Игровая мышь с оптическим сенсором",7,"как новый","Razer","1234567890132","DeathAdder-V2",0.082,"https://example.com/razer1.jpg"

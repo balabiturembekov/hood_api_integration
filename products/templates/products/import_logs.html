@@ -1,0 +1,203 @@
+{% extends 'products/base.html' %}
+
+{% block title %}Логи импорта{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-history"></i> История импортов</h2>
+                <div>
+                    <a href="{% url 'import_products' %}" class="btn btn-primary">
+                        <i class="fas fa-file-import"></i> Новый импорт
+                    </a>
+                    <a href="{% url 'products_list' %}" class="btn btn-secondary ms-2">
+                        <i class="fas fa-list"></i> Список товаров
+                    </a>
+                </div>
+            </div>
+            
+            {% if page_obj %}
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Файл</th>
+                                        <th>Статус</th>
+                                        <th>Всего строк</th>
+                                        <th>Успешно</th>
+                                        <th>Ошибок</th>
+                                        <th>Процент успеха</th>
+                                        <th>Пользователь</th>
+                                        <th>Дата</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in page_obj %}
+                                    <tr>
+                                        <td>
+                                            <i class="fas fa-file-csv text-info"></i>
+                                            {{ log.file_name }}
+                                        </td>
+                                        <td>
+                                            {% if log.status == 'success' %}
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check"></i> Успешно
+                                                </span>
+                                            {% elif log.status == 'error' %}
+                                                <span class="badge bg-danger">
+                                                    <i class="fas fa-times"></i> Ошибка
+                                                </span>
+                                            {% elif log.status == 'partial' %}
+                                                <span class="badge bg-warning">
+                                                    <i class="fas fa-exclamation-triangle"></i> Частично
+                                                </span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">
+                                                    <i class="fas fa-clock"></i> В процессе
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ log.total_rows }}</td>
+                                        <td class="text-success">{{ log.success_count }}</td>
+                                        <td class="text-danger">{{ log.error_count }}</td>
+                                        <td>
+                                            <div class="progress" style="width: 100px; height: 20px;">
+                                                <div class="progress-bar 
+                                                    {% if log.get_success_rate >= 80 %}bg-success
+                                                    {% elif log.get_success_rate >= 50 %}bg-warning
+                                                    {% else %}bg-danger{% endif %}" 
+                                                    role="progressbar" 
+                                                    style="width: {{ log.get_success_rate }}%"
+                                                    aria-valuenow="{{ log.get_success_rate }}" 
+                                                    aria-valuemin="0" 
+                                                    aria-valuemax="100">
+                                                    {{ log.get_success_rate }}%
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {% if log.created_by %}
+                                                <i class="fas fa-user"></i> {{ log.created_by.username }}
+                                            {% else %}
+                                                <span class="text-muted">Неизвестно</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <small class="text-muted">
+                                                {{ log.created_at|date:"d.m.Y H:i" }}
+                                                {% if log.completed_at %}
+                                                    <br>Завершено: {{ log.completed_at|date:"d.m.Y H:i" }}
+                                                {% endif %}
+                                            </small>
+                                        </td>
+                                        <td>
+                                            {% if log.error_details %}
+                                                <button class="btn btn-sm btn-outline-danger" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#errorModal{{ log.id }}">
+                                                    <i class="fas fa-exclamation-triangle"></i> Ошибки
+                                                </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    
+                                    <!-- Modal для ошибок -->
+                                    {% if log.error_details %}
+                                    <div class="modal fade" id="errorModal{{ log.id }}" tabindex="-1">
+                                        <div class="modal-dialog modal-lg">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">
+                                                        <i class="fas fa-exclamation-triangle text-danger"></i>
+                                                        Ошибки импорта: {{ log.file_name }}
+                                                    </h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <div class="alert alert-warning">
+                                                        <strong>Всего ошибок:</strong> {{ log.error_count }}
+                                                    </div>
+                                                    <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">{{ log.error_details }}</pre>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                                        Закрыть
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Пагинация -->
+                {% if page_obj.has_other_pages %}
+                <nav aria-label="Пагинация логов импорта">
+                    <ul class="pagination justify-content-center mt-4">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                
+            {% else %}
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                        <h4 class="text-muted">История импортов пуста</h4>
+                        <p class="text-muted">Здесь будут отображаться все импорты продуктов из CSV файлов</p>
+                        <a href="{% url 'import_products' %}" class="btn btn-primary">
+                            <i class="fas fa-file-import"></i> Создать первый импорт
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
