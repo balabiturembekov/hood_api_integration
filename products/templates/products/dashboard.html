@@ -361,10 +361,34 @@
                         </a>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
+                <div class="row mt-2">
+                    <div class="col-md-3">
+                        <form method="post" action="{% url 'sync_full_categories' %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-warning w-100 mb-2">
+                                <i class="fas fa-sitemap"></i> Полная иерархия категорий
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-md-3">
+                        <form method="post" action="{% url 'auto_assign_subcategories' %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-info w-100 mb-2">
+                                <i class="fas fa-tags"></i> Автоназначение подкатегорий
+                            </button>
+                        </form>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{% url 'import_logs' %}" class="btn btn-outline-info w-100 mb-2">
+                            <i class="fas fa-history"></i> История импортов
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{% url 'products_list' %}" class="btn btn-outline-primary w-100 mb-2">
+                            <i class="fas fa-list"></i> Список товаров
+                        </a>
+                    </div>
+                </div>
 
 <!-- JavaScript для проверки соединения -->
 <script>

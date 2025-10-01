@@ -530,7 +530,71 @@ class HoodAPIService:
                 'raw_response': ''
             }
     
-    def get_categories_by_parent(self, parent_id: str) -> Dict[str, Any]:
+    def get_full_category_hierarchy(self) -> Dict[str, Any]:
+        """Получение полной иерархии категорий с подкатегориями"""
+        try:
+            all_categories = []
+            processed_categories = set()
+            
+            # Начинаем с корневых категорий (categoryID=0)
+            root_categories = self.get_categories()
+            if not root_categories.get('success'):
+                return root_categories
+            
+            # Обрабатываем корневые категории
+            for category in root_categories.get('categories', []):
+                category_id = category.get('id', '')
+                if category_id and category_id not in processed_categories:
+                    processed_categories.add(category_id)
+                    all_categories.append(category)
+                    
+                    # Получаем подкатегории для каждой категории
+                    subcategories = self._get_all_subcategories(category_id, processed_categories)
+                    all_categories.extend(subcategories)
+            
+            # Сортируем категории по уровню и пути
+            all_categories.sort(key=lambda x: (int(x.get('level', 0)), x.get('path', '')))
+            
+            return {
+                'success': True,
+                'categories': all_categories,
+                'total_count': len(all_categories),
+                'source': 'api_full_hierarchy'
+            }
+            
+        except Exception as e:
+            logger.error(f"Full Category Hierarchy Error: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Ошибка получения полной иерархии: {str(e)}'
+            }
+    
+    def _get_all_subcategories(self, parent_id: str, processed_categories: set, max_depth: int = 5) -> List[Dict]:
+        """Рекурсивно получает все подкатегории"""
+        subcategories = []
+        current_depth = 0
+        
+        def get_subcategories_recursive(parent_id: str, depth: int):
+            if depth >= max_depth:
+                return
+            
+            try:
+                result = self.get_categories_by_parent(parent_id)
+                if result.get('success'):
+                    for category in result.get('categories', []):
+                        category_id = category.get('id', '')
+                        if category_id and category_id not in processed_categories:
+                            processed_categories.add(category_id)
+                            category['level'] = str(depth + 1)
+                            subcategories.append(category)
+                            
+                            # Рекурсивно получаем подкатегории
+                            get_subcategories_recursive(category_id, depth + 1)
+            except Exception as e:
+                logger.warning(f"Error getting subcategories for {parent_id}: {str(e)}")
+        
+        get_subcategories_recursive(parent_id, current_depth)
+        return subcategories
         """Получение подкатегорий для родительской категории"""
         try:
             # Создаем XML запрос для categoriesBrowse с конкретным categoryID
@@ -3871,3 +3935,110 @@ class HoodAPIService:
             'comparison': comparison,
             'raw_response': result.get('raw_response')
         }
+    
+    def auto_assign_subcategories(self) -> Dict[str, Any]:
+        """Автоматическое назначение подкатегорий товарам"""
+        try:
+            from .models import Product, HoodCategory
+            
+            # Получаем все товары без подкатегорий
+            products_without_subcategories = Product.objects.filter(
+                hood_category__isnull=True
+            ).exclude(
+                title__isnull=True
+            ).exclude(
+                title=''
+            )
+            
+            assigned_count = 0
+            errors = []
+            
+            for product in products_without_subcategories:
+                try:
+                    # Ищем подходящую подкатегорию по названию товара
+                    subcategory = self._find_best_subcategory(product.title, product.description or '')
+                    
+                    if subcategory:
+                        product.hood_category = subcategory
+                        product.save()
+                        assigned_count += 1
+                        logger.info(f"Назначена подкатегория {subcategory.name} для товара {product.title}")
+                    else:
+                        # Если не найдена подходящая подкатегория, используем fallback
+                        fallback_category = self._get_fallback_category()
+                        if fallback_category:
+                            product.hood_category = fallback_category
+                            product.save()
+                            assigned_count += 1
+                            logger.info(f"Назначена fallback категория {fallback_category.name} для товара {product.title}")
+                        
+                except Exception as e:
+                    error_msg = f"Ошибка назначения категории для товара {product.id}: {str(e)}"
+                    errors.append(error_msg)
+                    logger.error(error_msg)
+            
+            return {
+                'success': True,
+                'assigned_count': assigned_count,
+                'total_processed': products_without_subcategories.count(),
+                'errors': errors
+            }
+            
+        except Exception as e:
+            logger.error(f"Auto Assign Subcategories Error: {str(e)}")
+            return {
+                'success': False,
+                'error': f'Ошибка автоматического назначения: {str(e)}'
+            }
+    
+    def _find_best_subcategory(self, title: str, description: str) -> 'HoodCategory':
+        """Поиск лучшей подкатегории по названию и описанию товара"""
+        from .models import HoodCategory
+        
+        # Ключевые слова для поиска категорий
+        category_keywords = {
+            'Möbel': ['möbel', 'furniture', 'мебель', 'stuhl', 'chair', 'стол', 'table', 'sofa', 'couch'],
+            'Elektronik': ['elektronik', 'electronic', 'электроника', 'handy', 'phone', 'телефон', 'laptop', 'notebook'],
+            'Haushalt': ['haushalt', 'household', 'быт', 'küche', 'kitchen', 'кухня', 'waschmaschine', 'washing'],
+            'Kleidung': ['kleidung', 'clothing', 'одежда', 'shirt', 'hose', 'shoes', 'обувь'],
+            'Sport': ['sport', 'спорт', 'fitness', 'laufen', 'running', 'футбол', 'football'],
+            'Bücher': ['buch', 'book', 'книга', 'magazin', 'magazine', 'журнал'],
+            'Spielzeug': ['spielzeug', 'toy', 'игрушка', 'puppe', 'doll', 'кукла'],
+            'Auto': ['auto', 'car', 'машина', 'fahrzeug', 'vehicle', 'транспорт'],
+        }
+        
+        # Объединяем название и описание для поиска
+        search_text = f"{title} {description}".lower()
+        
+        # Ищем категории по ключевым словам
+        for category_name, keywords in category_keywords.items():
+            for keyword in keywords:
+                if keyword in search_text:
+                    # Ищем подкатегорию в этой категории
+                    subcategory = HoodCategory.objects.filter(
+                        name__icontains=category_name,
+                        level__gte=3  # Ищем категории 3-го уровня и глубже
+                    ).first()
+                    
+                    if subcategory:
+                        return subcategory
+        
+        return None
+    
+    def _get_fallback_category(self) -> 'HoodCategory':
+        """Получение fallback категории для товаров без подкатегории"""
+        from .models import HoodCategory
+        
+        # Ищем общую категорию "Sonstiges" или "Miscellaneous"
+        fallback_categories = ['Sonstiges', 'Miscellaneous', 'Other', 'Allgemein']
+        
+        for category_name in fallback_categories:
+            category = HoodCategory.objects.filter(
+                name__icontains=category_name
+            ).first()
+            
+            if category:
+                return category
+        
+        # Если не найдена fallback категория, берем первую доступную
+        return HoodCategory.objects.filter(is_active=True).first()

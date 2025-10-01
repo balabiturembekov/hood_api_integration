@@ -932,7 +932,88 @@ def import_products(request):
 
 
 @login_required
-def import_logs(request):
+def auto_assign_subcategories(request):
+    """Автоматическое назначение подкатегорий товарам"""
+    if request.method == 'POST':
+        try:
+            hood_service = HoodAPIService()
+            result = hood_service.auto_assign_subcategories()
+            
+            if result.get('success'):
+                assigned_count = result.get('assigned_count', 0)
+                total_processed = result.get('total_processed', 0)
+                errors = result.get('errors', [])
+                
+                if assigned_count > 0:
+                    messages.success(request, f'Успешно назначено подкатегорий: {assigned_count} из {total_processed} товаров')
+                else:
+                    messages.info(request, 'Все товары уже имеют назначенные категории')
+                
+                if errors:
+                    for error in errors[:5]:  # Показываем только первые 5 ошибок
+                        messages.warning(request, error)
+            else:
+                messages.error(request, f'Ошибка назначения подкатегорий: {result.get("error")}')
+                
+        except Exception as e:
+            messages.error(request, f'Ошибка: {str(e)}')
+    
+    return redirect('products_list')
+
+
+@login_required
+def sync_full_categories(request):
+    """Синхронизация полной иерархии категорий с Hood.de"""
+    if request.method == 'POST':
+        try:
+            hood_service = HoodAPIService()
+            
+            # Получаем полную иерархию категорий
+            result = hood_service.get_full_category_hierarchy()
+            
+            if not result.get('success'):
+                messages.warning(request, f'API недоступен: {result.get("error")}. Используем локальные категории.')
+                result = hood_service.get_categories_fallback()
+            
+            if result.get('success'):
+                categories_data = result.get('categories', [])
+                created_count = 0
+                updated_count = 0
+                source = result.get('source', 'api')
+                
+                for cat_data in categories_data:
+                    hood_id = cat_data.get('id', '')
+                    if not hood_id:
+                        continue
+                        
+                    category, created = HoodCategory.objects.get_or_create(
+                        hood_id=hood_id,
+                        defaults={
+                            'name': cat_data.get('name', ''),
+                            'path': cat_data.get('path', ''),
+                            'level': int(cat_data.get('level', 0))
+                        }
+                    )
+                    
+                    if created:
+                        created_count += 1
+                    else:
+                        category.name = cat_data.get('name', '')
+                        category.path = cat_data.get('path', '')
+                        category.level = int(cat_data.get('level', 0))
+                        category.save()
+                        updated_count += 1
+                
+                source_text = "из полной иерархии API Hood.de" if source == 'api_full_hierarchy' else "из локального файла"
+                total_categories = HoodCategory.objects.count()
+                messages.success(request, f'Синхронизация полной иерархии завершена {source_text}! Создано: {created_count}, Обновлено: {updated_count}. Всего категорий в базе: {total_categories}')
+            else:
+                messages.error(request, f'Ошибка синхронизации: {result.get("error")}')
+                
+        except Exception as e:
+            messages.error(request, f'Ошибка: {str(e)}')
+    
+    return redirect('dashboard')
     """Список логов импорта"""
     logs = ImportLog.objects.all().order_by('-created_at')
     paginator = Paginator(logs, 20)
