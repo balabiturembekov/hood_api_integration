@@ -141,6 +141,10 @@ class Product(models.Model):
         ('pickup_at', 'Самовывоз - Австрия'),
         ('pickup_ch', 'Самовывоз - Швейцария'),
         ('pickup_int', 'Самовывоз - международная'),
+        ('spedition_nat', 'Sonderversand (Spedition) Deutschland'),
+        ('spedition_at', 'Sonderversand (Spedition) Österreich'),
+        ('spedition_ch', 'Sonderversand (Spedition) Schweiz'),
+        ('free_pickup_nat', 'Kostenlose Abholung Deutschland'),
     ]
     shipmethods = models.CharField(max_length=500, default='DHLPacket_nat,DHLPacket_eu', verbose_name="Методы доставки")
     weight = models.DecimalField(max_digits=8, decimal_places=3, null=True, blank=True, verbose_name="Вес в кг")
