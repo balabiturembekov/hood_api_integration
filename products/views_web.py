@@ -4,9 +4,12 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.db.models import Q
-from .models import Product, HoodCategory, UploadLog, BulkUpload
 from .services import HoodAPIService
+from .models import Product, HoodCategory, UploadLog, BulkUpload
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def public_home(request):
@@ -129,6 +132,12 @@ def upload_product(request, pk):
                 messages.error(request, 'Продукт уже загружен на Hood.de')
                 return redirect('product_detail', pk=pk)
             
+            # Создаем лог загрузки
+            upload_log = UploadLog.objects.create(
+                product=product,
+                status='pending'
+            )
+            
             # Получаем данные для загрузки
             hood_data = product.get_hood_data()
             
@@ -142,12 +151,24 @@ def upload_product(request, pk):
                 product.hood_item_id = result.get('item_id', '')
                 product.save()
                 
+                # Обновляем лог как успешный
+                upload_log.status = 'success'
+                upload_log.hood_item_id = result.get('item_id', '')
+                upload_log.response_data = result
+                upload_log.save()
+                
                 # Проверяем, существует ли товар уже
                 if result.get('already_exists'):
                     messages.warning(request, f'Товар уже существует на Hood.de! ID: {result.get("item_id")}')
                 else:
                     messages.success(request, f'Продукт успешно загружен на Hood.de! ID: {result.get("item_id")}')
             else:
+                # Обновляем лог как ошибочный
+                upload_log.status = 'error'
+                upload_log.error_message = result.get('error', 'Неизвестная ошибка')
+                upload_log.response_data = result
+                upload_log.save()
+                
                 messages.error(request, f'Ошибка загрузки: {result.get("error", "Неизвестная ошибка")}')
             
         except Product.DoesNotExist:
@@ -230,6 +251,12 @@ def bulk_upload(request):
             bulk_upload.save()
             
             for product in products:
+                # Создаем лог для каждого товара
+                upload_log = UploadLog.objects.create(
+                    product=product,
+                    status='pending'
+                )
+                
                 try:
                     hood_data = product.get_hood_data()
                     result = hood_service.upload_item(hood_data)
@@ -239,11 +266,35 @@ def bulk_upload(request):
                         product.hood_item_id = result.get('item_id', '')
                         product.save()
                         uploaded_count += 1
+                        
+                        # Обновляем лог как успешный
+                        upload_log.status = 'success'
+                        upload_log.hood_item_id = result.get('item_id', '')
+                        upload_log.response_data = result
+                        upload_log.save()
+                        
+                        logger.info(f"Продукт {product.id} ({product.title}) успешно загружен")
                     else:
                         failed_count += 1
+                        error_msg = result.get('error', 'Неизвестная ошибка')
+                        
+                        # Обновляем лог как ошибочный
+                        upload_log.status = 'error'
+                        upload_log.error_message = error_msg
+                        upload_log.response_data = result
+                        upload_log.save()
+                        
+                        logger.error(f"Ошибка загрузки продукта {product.id} ({product.title}): {error_msg}")
                         
                 except Exception as e:
                     failed_count += 1
+                    
+                    # Обновляем лог как ошибочный
+                    upload_log.status = 'error'
+                    upload_log.error_message = str(e)
+                    upload_log.save()
+                    
+                    logger.error(f"Исключение при загрузке продукта {product.id} ({product.title}): {str(e)}")
             
             # Обновляем статистику
             bulk_upload.uploaded_products = uploaded_count
@@ -351,8 +402,90 @@ def check_api_connection(request):
                 'status': 'error',
                 'message': f'Ошибка проверки соединения: {str(e)}'
             })
+
+
+@login_required
+def get_all_product_ids(request):
+    """Получить все ID товаров для массовой загрузки"""
+    try:
+        # Получаем все ID товаров, которые еще не загружены на Hood.de
+        product_ids = Product.objects.filter(is_uploaded_to_hood=False).values_list('id', flat=True)
+        return JsonResponse({
+            'success': True,
+            'product_ids': list(product_ids),
+            'count': len(product_ids)
+        })
+    except Exception as e:
+        logger.error(f"Ошибка получения списка товаров: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'message': 'Метод не поддерживается'})
+
+
+@login_required
+def bulk_delete(request):
+    """Массовое удаление продуктов"""
+    if request.method == 'POST':
+        try:
+            import json as json_lib
+            data = json_lib.loads(request.body)
+            product_ids = data.get('product_ids', [])
+            
+            if not product_ids:
+                return JsonResponse({'success': False, 'error': 'Не указаны ID продуктов'})
+            
+            # Получаем продукты для удаления
+            products_to_delete = Product.objects.filter(id__in=product_ids)
+            hood_deleted_count = 0
+            errors = []
+            
+            for product in products_to_delete:
+                try:
+                    # Если товар загружен на Hood.de, удаляем его оттуда
+                    if product.is_uploaded_to_hood and product.hood_item_id:
+                        hood_service = HoodAPIService()
+                        hood_result = hood_service.delete_item(product.hood_item_id)
+                        
+                        if hood_result.get('success'):
+                            hood_deleted_count += 1
+                            # Обновляем статус в локальной БД - помечаем как не загруженный
+                            product.is_uploaded_to_hood = False
+                            product.hood_item_id = ''
+                            product.save()
+                            logger.info(f"Товар {product.id} ({product.title}) удален с Hood.de")
+                        else:
+                            error_msg = hood_result.get('error', 'Неизвестная ошибка')
+                            errors.append(f"Товар {product.id}: {error_msg}")
+                            logger.error(f"Ошибка удаления товара {product.id} с Hood.de: {error_msg}")
+                    else:
+                        # Товар не загружен на Hood.de
+                        errors.append(f"Товар {product.id}: не загружен на Hood.de")
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    errors.append(f"Товар {product.id}: {error_msg}")
+                    logger.error(f"Ошибка удаления товара {product.id}: {error_msg}")
+            
+            logger.info(f"Массово удалено с Hood.de {hood_deleted_count} продуктов пользователем {request.user.username}")
+            
+            # Формируем сообщение
+            message = f'Успешно удалено с Hood.de {hood_deleted_count} продуктов'
+            if errors:
+                message += f'. Ошибки: {len(errors)} товаров'
+            
+            return JsonResponse({
+                'success': True,
+                'deleted_count': hood_deleted_count,  # Для совместимости с фронтендом
+                'hood_deleted_count': hood_deleted_count,
+                'errors': errors,
+                'message': message
+            })
+            
+        except Exception as e:
+            logger.error(f"Ошибка массового удаления: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Метод не поддерживается'})
 
 
 @login_required

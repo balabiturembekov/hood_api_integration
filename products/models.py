@@ -336,6 +336,28 @@ class Product(models.Model):
             category_id = self.hood_category.hood_id
         elif self.category_id:
             category_id = self.category_id
+        
+        # Получаем описание и проверяем его длину
+        description = self.html_description or self.description or ''
+        
+        # Hood.de требует описания минимум 100 символов
+        if len(description) < 100:
+            # Расширяем описание, добавляя информацию о товаре
+            extended_description = f"{description}\n\n"
+            extended_description += f"Детали товара:\n"
+            extended_description += f"- Название: {self.title}\n"
+            if self.manufacturer:
+                extended_description += f"- Производитель: {self.manufacturer}\n"
+            if self.ean:
+                extended_description += f"- EAN: {self.ean}\n"
+            if self.mpn:
+                extended_description += f"- MPN: {self.mpn}\n"
+            extended_description += f"- Состояние: {self.get_condition_display()}\n"
+            if self.weight:
+                extended_description += f"- Вес: {self.weight} кг\n"
+            extended_description += f"- Цена: {self.price} €\n"
+            extended_description += f"\nЭтот товар предлагается в отличном состоянии и готов к использованию."
+            description = extended_description
             
         return {
             'itemMode': self.item_mode,
@@ -343,7 +365,7 @@ class Product(models.Model):
             'itemName': self.title,
             'quantity': self.quantity,
             'condition': self.condition,
-            'description': self.html_description or self.description,
+            'description': description,
             'price': float(self.price) if self.price else None,
             'priceStart': float(self.price_start) if self.price_start else None,
             'listPrice': float(self.list_price) if self.list_price else None,

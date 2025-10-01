@@ -242,7 +242,13 @@
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="selectAll">
                         <label class="form-check-label" for="selectAll">
-                            Выбрать все на странице
+                            Выбрать все на странице ({{ page_obj.object_list|length }})
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAllInDatabase">
+                        <label class="form-check-label" for="selectAllInDatabase">
+                            Выбрать все товары в базе ({{ page_obj.paginator.count }})
                         </label>
                     </div>
                 </div>
@@ -251,7 +257,10 @@
                 <button type="submit" class="btn btn-primary" id="bulkUploadBtn" disabled>
                     <i class="fas fa-upload"></i> Загрузить выбранные продукты
                 </button>
-                <small class="text-muted ms-2">Выберите продукты для массовой загрузки</small>
+        <button type="button" class="btn btn-danger ms-2" id="bulkDeleteBtn" disabled onclick="confirmBulkDelete()">
+            <i class="fas fa-trash"></i> Удалить с Hood.de
+        </button>
+                <small class="text-muted ms-2">Выберите продукты для массовых действий</small>
             </div>
         </form>
     </div>
@@ -263,36 +272,44 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Выбор всех продуктов
-    const selectAllCheckbox = document.getElementById('selectAll');
-    const productCheckboxes = document.querySelectorAll('input[name="product_ids"]');
     const bulkUploadBtn = document.getElementById('bulkUploadBtn');
-    
-    if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', function() {
-            productCheckboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
-            });
-            updateBulkUploadButton();
-        });
-    }
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     
     // Обновление кнопки массовой загрузки
     function updateBulkUploadButton() {
         const checkedBoxes = document.querySelectorAll('input[name="product_ids"]:checked');
-        bulkUploadBtn.disabled = checkedBoxes.length === 0;
-        bulkUploadBtn.textContent = checkedBoxes.length > 0 
-            ? `Загрузить ${checkedBoxes.length} продуктов` 
-            : 'Загрузить выбранные продукты';
+        const allProductIds = document.querySelectorAll('input[name="all_product_ids"]');
+        
+        const totalSelected = checkedBoxes.length + allProductIds.length;
+        
+        if (bulkUploadBtn) {
+            bulkUploadBtn.disabled = totalSelected === 0;
+            bulkUploadBtn.textContent = totalSelected > 0 
+                ? `Загрузить ${totalSelected} продуктов` 
+                : 'Загрузить выбранные продукты';
+        }
+        
+        if (bulkDeleteBtn) {
+            bulkDeleteBtn.disabled = totalSelected === 0;
+            const btnIcon = '<i class="fas fa-trash"></i> ';
+            bulkDeleteBtn.innerHTML = totalSelected > 0 
+                ? `${btnIcon}Удалить с Hood.de (${totalSelected})` 
+                : `${btnIcon}Удалить с Hood.de`;
+        }
     }
     
     // Добавляем чекбоксы к продуктам
     const productCards = document.querySelectorAll('.product-card');
     productCards.forEach((card, index) => {
+        const productLink = card.querySelector('a[href*="/products/"]');
+        if (!productLink) return;
+        
+        const productId = productLink.href.match(/\/(\d+)\//)[1];
+        
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.name = 'product_ids';
-        checkbox.value = card.querySelector('a[href*="/products/"]').href.match(/\/(\d+)\//)[1];
+        checkbox.value = productId;
         checkbox.className = 'form-check-input me-2';
         
         const label = document.createElement('label');
@@ -308,6 +325,155 @@ document.addEventListener('DOMContentLoaded', function() {
         
         checkbox.addEventListener('change', updateBulkUploadButton);
     });
+    
+    // Выбор всех продуктов на странице
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            const productCheckboxes = document.querySelectorAll('input[name="product_ids"]');
+            productCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateBulkUploadButton();
+        });
+    }
+    
+    // Выбор всех продуктов в базе данных
+    const selectAllInDatabaseCheckbox = document.getElementById('selectAllInDatabase');
+    if (selectAllInDatabaseCheckbox) {
+        selectAllInDatabaseCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                // Загружаем все ID товаров из базы данных
+                fetch('/get-all-product-ids/')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Очищаем текущие чекбоксы
+                            const productCheckboxes = document.querySelectorAll('input[name="product_ids"]');
+                            productCheckboxes.forEach(checkbox => {
+                                checkbox.checked = false;
+                            });
+                            
+                            // Создаем скрытые поля для всех товаров
+                            const bulkUploadForm = document.getElementById('bulkUploadForm');
+                            const existingHiddenFields = bulkUploadForm.querySelectorAll('input[name="all_product_ids"]');
+                            existingHiddenFields.forEach(field => field.remove());
+                            
+                            data.product_ids.forEach(productId => {
+                                const hiddenField = document.createElement('input');
+                                hiddenField.type = 'hidden';
+                                hiddenField.name = 'all_product_ids';
+                                hiddenField.value = productId;
+                                bulkUploadForm.appendChild(hiddenField);
+                            });
+                            
+                            updateBulkUploadButton();
+                        } else {
+                            alert('Ошибка загрузки списка товаров: ' + data.error);
+                            this.checked = false;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Ошибка:', error);
+                        alert('Ошибка загрузки списка товаров');
+                        this.checked = false;
+                    });
+            } else {
+                // Удаляем скрытые поля
+                const bulkUploadForm = document.getElementById('bulkUploadForm');
+                const existingHiddenFields = bulkUploadForm.querySelectorAll('input[name="all_product_ids"]');
+                existingHiddenFields.forEach(field => field.remove());
+                updateBulkUploadButton();
+            }
+        });
+    }
+    
+    // Обработка отправки формы
+    const bulkUploadForm = document.getElementById('bulkUploadForm');
+    if (bulkUploadForm) {
+        bulkUploadForm.addEventListener('submit', function(e) {
+            // Удаляем старые скрытые поля для product_ids
+            const existingHiddenFields = bulkUploadForm.querySelectorAll('input[name="product_ids"][type="hidden"]');
+            existingHiddenFields.forEach(field => field.remove());
+            
+            // Добавляем скрытые поля для выбранных продуктов на странице
+            const checkedBoxes = document.querySelectorAll('input[name="product_ids"]:checked');
+            checkedBoxes.forEach(checkbox => {
+                const hiddenField = document.createElement('input');
+                hiddenField.type = 'hidden';
+                hiddenField.name = 'product_ids';
+                hiddenField.value = checkbox.value;
+                bulkUploadForm.appendChild(hiddenField);
+            });
+            
+            // Если выбраны все товары в базе, добавляем их как product_ids
+            const allProductIds = document.querySelectorAll('input[name="all_product_ids"]');
+            allProductIds.forEach(field => {
+                const hiddenField = document.createElement('input');
+                hiddenField.type = 'hidden';
+                hiddenField.name = 'product_ids';
+                hiddenField.value = field.value;
+                bulkUploadForm.appendChild(hiddenField);
+            });
+            
+            // Проверяем, что выбраны продукты
+            const totalSelected = checkedBoxes.length + allProductIds.length;
+            if (totalSelected === 0) {
+                e.preventDefault();
+                alert('Пожалуйста, выберите хотя бы один продукт');
+                return false;
+            }
+        });
+    }
 });
+
+// Функция для подтверждения массового удаления
+function confirmBulkDelete() {
+    const checkedBoxes = document.querySelectorAll('input[name="product_ids"]:checked');
+    const allProductIds = document.querySelectorAll('input[name="all_product_ids"]');
+    const totalSelected = checkedBoxes.length + allProductIds.length;
+    
+    if (totalSelected === 0) {
+        alert('Пожалуйста, выберите хотя бы один продукт для удаления');
+        return;
+    }
+    
+    if (!confirm(`Вы уверены, что хотите удалить ${totalSelected} продуктов с Hood.de? Товары останутся в локальной базе данных.`)) {
+        return;
+    }
+    
+    // Собираем ID продуктов
+    const productIds = [];
+    checkedBoxes.forEach(checkbox => productIds.push(checkbox.value));
+    allProductIds.forEach(field => productIds.push(field.value));
+    
+    // Отправляем запрос на удаление
+    fetch('/bulk-delete/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({ product_ids: productIds })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            let message = `Успешно удалено с Hood.de ${data.hood_deleted_count} продуктов!`;
+            if (data.errors && data.errors.length > 0) {
+                message += `\nОшибки при удалении ${data.errors.length} товаров:`;
+                data.errors.forEach(error => message += `\n- ${error}`);
+            }
+            alert(message);
+            window.location.reload();
+        } else {
+            alert(`Ошибка удаления: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка:', error);
+        alert('Произошла ошибка при удалении продуктов');
+    });
+}
 </script>
 {% endblock %}

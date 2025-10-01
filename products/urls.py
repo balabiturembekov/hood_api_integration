@@ -21,9 +21,11 @@ urlpatterns = [
     path('products/<int:pk>/upload/', views_web.upload_product, name='upload_product'),
     path('products/<int:pk>/delete/', views_web.delete_product, name='delete_product'),
     path('bulk-upload/', views_web.bulk_upload, name='bulk_upload'),
+    path('bulk-delete/', views_web.bulk_delete, name='bulk_delete'),
     path('sync-categories/', views_web.sync_categories, name='sync_categories'),
     path('api-test/', views_web.api_test, name='api_test'),
     path('check-api-connection/', views_web.check_api_connection, name='check_api_connection'),
+    path('get-all-product-ids/', views_web.get_all_product_ids, name='get_all_product_ids'),
     
     # Hood.de API функции
     path('hood-items/', views_web.hood_items_list, name='hood_items_list'),
