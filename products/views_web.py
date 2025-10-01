@@ -743,6 +743,12 @@ def hood_items_compare(request):
 @login_required
 def import_products(request):
     """Импорт продуктов из CSV файла"""
+    if request.method == 'GET':
+        # GET запрос - показываем форму импорта
+        return render(request, 'products/import_products.html', {
+            'title': 'Импорт продуктов из CSV'
+        })
+    
     if request.method == 'POST':
         try:
             csv_file = request.FILES.get('csv_file')
