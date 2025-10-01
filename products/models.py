@@ -208,7 +208,7 @@ class Product(models.Model):
     ]
     feature_bold_title = models.CharField(max_length=3, choices=FEATURE_CHOICES, default='no', verbose_name="Жирный заголовок")
     feature_background_color = models.CharField(max_length=3, choices=FEATURE_CHOICES, default='no', verbose_name="Цветной фон")
-    feature_gallery = models.CharField(max_length=3, choices=FEATURE_CHOICES, default='yes', verbose_name="Галерея изображений")
+    feature_gallery = models.CharField(max_length=3, choices=FEATURE_CHOICES, default='no', verbose_name="Галерея изображений")
     feature_category = models.CharField(max_length=3, choices=FEATURE_CHOICES, default='no', verbose_name="Выделение в категории")
     feature_home_page = models.CharField(max_length=3, choices=FEATURE_CHOICES, default='no', verbose_name="На главной странице")
     feature_home_page_image = models.CharField(max_length=3, choices=FEATURE_CHOICES, default='no', verbose_name="Изображение на главной")
