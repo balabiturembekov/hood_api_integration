@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ProductViewSet, HoodCategoryViewSet, UploadLogViewSet, BulkUploadViewSet
+from .views import ProductViewSet, HoodCategoryViewSet, UploadLogViewSet, BulkUploadViewSet, OrderViewSet, OrderSyncLogViewSet
 from . import views_web
 
 router = DefaultRouter()
@@ -8,6 +8,8 @@ router.register(r'products', ProductViewSet)
 router.register(r'categories', HoodCategoryViewSet)
 router.register(r'upload-logs', UploadLogViewSet)
 router.register(r'bulk-uploads', BulkUploadViewSet)
+router.register(r'orders', OrderViewSet)
+router.register(r'order-sync-logs', OrderSyncLogViewSet)
 
 urlpatterns = [
     # API маршруты
@@ -36,4 +38,10 @@ urlpatterns = [
     path('hood-items/<str:item_id>/', views_web.hood_item_status, name='hood_item_status'),
     path('hood-items-analysis/', views_web.hood_items_analysis, name='hood_items_analysis'),
     path('hood-items-compare/', views_web.hood_items_compare, name='hood_items_compare'),
+    
+    # Заказы
+    path('orders/', views_web.orders_list, name='orders_list'),
+    path('orders/<int:pk>/', views_web.order_detail, name='order_detail'),
+    path('orders/sync/', views_web.sync_orders, name='sync_orders'),
+    path('orders/stats/', views_web.orders_stats, name='orders_stats'),
 ]
