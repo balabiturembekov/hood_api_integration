@@ -2,7 +2,10 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from .models import Product, HoodCategory, UploadLog, BulkUpload
+from .models import Product, HoodCategory, UploadLog, BulkUpload, Order, OrderItem, OrderStatusHistory, OrderSyncLog
+
+# Импортируем админку для заказов
+from .admin_orders import *
 
 
 @admin.register(HoodCategory)

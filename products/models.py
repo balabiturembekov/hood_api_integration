@@ -513,3 +513,203 @@ class BulkUpload(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.status}"
+
+
+class Order(models.Model):
+    """Модель для заказов Hood.de"""
+    
+    STATUS_CHOICES = [
+        ('new', 'Новый'),
+        ('paid', 'Оплачен'),
+        ('shipped', 'Отправлен'),
+        ('delivered', 'Доставлен'),
+        ('cancelled', 'Отменен'),
+        ('returned', 'Возвращен'),
+        ('refunded', 'Возврат средств'),
+    ]
+    
+    PAYMENT_METHOD_CHOICES = [
+        ('wireTransfer', 'Банковский перевод'),
+        ('payPal', 'PayPal'),
+        ('invoice', 'Счет'),
+        ('cashOnDelivery', 'Наложенный платеж'),
+        ('cash', 'Наличные'),
+        ('sofort', 'Sofort'),
+        ('amazon', 'Amazon Pay'),
+        ('klarna', 'Klarna'),
+    ]
+    
+    # Основные поля заказа
+    hood_order_id = models.CharField(max_length=50, unique=True, verbose_name="ID заказа Hood.de")
+    order_number = models.CharField(max_length=100, blank=True, verbose_name="Номер заказа")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='new', verbose_name="Статус заказа")
+    
+    # Информация о покупателе
+    buyer_username = models.CharField(max_length=100, verbose_name="Имя пользователя покупателя")
+    buyer_email = models.EmailField(blank=True, verbose_name="Email покупателя")
+    buyer_name = models.CharField(max_length=200, blank=True, verbose_name="Имя покупателя")
+    
+    # Адрес доставки
+    shipping_name = models.CharField(max_length=200, blank=True, verbose_name="Имя получателя")
+    shipping_company = models.CharField(max_length=200, blank=True, verbose_name="Компания")
+    shipping_address1 = models.CharField(max_length=200, blank=True, verbose_name="Адрес 1")
+    shipping_address2 = models.CharField(max_length=200, blank=True, verbose_name="Адрес 2")
+    shipping_city = models.CharField(max_length=100, blank=True, verbose_name="Город")
+    shipping_state = models.CharField(max_length=100, blank=True, verbose_name="Регион")
+    shipping_postal_code = models.CharField(max_length=20, blank=True, verbose_name="Почтовый индекс")
+    shipping_country = models.CharField(max_length=100, blank=True, verbose_name="Страна")
+    shipping_phone = models.CharField(max_length=50, blank=True, verbose_name="Телефон")
+    
+    # Финансовая информация
+    subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Подытог")
+    shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Стоимость доставки")
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Сумма налога")
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Общая сумма")
+    
+    # Платежная информация
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, verbose_name="Способ оплаты")
+    payment_status = models.CharField(max_length=50, blank=True, verbose_name="Статус платежа")
+    payment_date = models.DateTimeField(null=True, blank=True, verbose_name="Дата оплаты")
+    
+    # Информация о доставке
+    shipping_method = models.CharField(max_length=100, blank=True, verbose_name="Способ доставки")
+    tracking_number = models.CharField(max_length=100, blank=True, verbose_name="Номер отслеживания")
+    shipped_date = models.DateTimeField(null=True, blank=True, verbose_name="Дата отправки")
+    delivered_date = models.DateTimeField(null=True, blank=True, verbose_name="Дата доставки")
+    
+    # Дополнительная информация
+    notes = models.TextField(blank=True, verbose_name="Примечания")
+    internal_notes = models.TextField(blank=True, verbose_name="Внутренние заметки")
+    
+    # Системные поля
+    order_date = models.DateTimeField(verbose_name="Дата заказа")
+    last_status_change = models.DateTimeField(null=True, blank=True, verbose_name="Последнее изменение статуса")
+    synced_at = models.DateTimeField(null=True, blank=True, verbose_name="Последняя синхронизация")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создано")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлено")
+    
+    class Meta:
+        verbose_name = "Заказ"
+        verbose_name_plural = "Заказы"
+        ordering = ['-order_date']
+        indexes = [
+            models.Index(fields=['hood_order_id']),
+            models.Index(fields=['status']),
+            models.Index(fields=['order_date']),
+            models.Index(fields=['buyer_username']),
+        ]
+    
+    def __str__(self):
+        return f"Заказ #{self.hood_order_id} - {self.buyer_username}"
+    
+    def get_status_display_color(self):
+        """Возвращает цвет для отображения статуса"""
+        colors = {
+            'new': 'primary',
+            'paid': 'success',
+            'shipped': 'info',
+            'delivered': 'success',
+            'cancelled': 'danger',
+            'returned': 'warning',
+            'refunded': 'secondary',
+        }
+        return colors.get(self.status, 'secondary')
+
+
+class OrderItem(models.Model):
+    """Модель для товаров в заказе"""
+    
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items', verbose_name="Заказ")
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Продукт")
+    
+    # Информация о товаре на момент заказа
+    hood_item_id = models.CharField(max_length=50, blank=True, verbose_name="ID товара Hood.de")
+    item_title = models.CharField(max_length=200, verbose_name="Название товара")
+    item_sku = models.CharField(max_length=100, blank=True, verbose_name="Артикул товара")
+    item_ean = models.CharField(max_length=20, blank=True, verbose_name="EAN товара")
+    
+    # Количество и цены
+    quantity = models.IntegerField(default=1, verbose_name="Количество")
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Цена за единицу")
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Общая стоимость")
+    
+    # Варианты товара (если есть)
+    variant_details = models.JSONField(default=dict, blank=True, verbose_name="Детали варианта")
+    
+    # Системные поля
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создано")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлено")
+    
+    class Meta:
+        verbose_name = "Товар в заказе"
+        verbose_name_plural = "Товары в заказах"
+        ordering = ['id']
+    
+    def __str__(self):
+        return f"{self.item_title} x{self.quantity}"
+    
+    def save(self, *args, **kwargs):
+        # Автоматически рассчитываем общую стоимость
+        self.total_price = self.quantity * self.unit_price
+        super().save(*args, **kwargs)
+
+
+class OrderStatusHistory(models.Model):
+    """История изменений статуса заказа"""
+    
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='status_history', verbose_name="Заказ")
+    old_status = models.CharField(max_length=20, blank=True, verbose_name="Предыдущий статус")
+    new_status = models.CharField(max_length=20, verbose_name="Новый статус")
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Изменено пользователем")
+    change_reason = models.TextField(blank=True, verbose_name="Причина изменения")
+    changed_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата изменения")
+    
+    class Meta:
+        verbose_name = "История статуса заказа"
+        verbose_name_plural = "История статусов заказов"
+        ordering = ['-changed_at']
+    
+    def __str__(self):
+        return f"Заказ #{self.order.hood_order_id}: {self.old_status} → {self.new_status}"
+
+
+class OrderSyncLog(models.Model):
+    """Лог синхронизации заказов с Hood.de"""
+    
+    STATUS_CHOICES = [
+        ('pending', 'В процессе'),
+        ('success', 'Успешно'),
+        ('error', 'Ошибка'),
+        ('partial', 'Частично успешно'),
+    ]
+    
+    sync_type = models.CharField(max_length=50, verbose_name="Тип синхронизации")
+    start_date = models.DateField(null=True, blank=True, verbose_name="Начальная дата")
+    end_date = models.DateField(null=True, blank=True, verbose_name="Конечная дата")
+    
+    total_orders_found = models.IntegerField(default=0, verbose_name="Найдено заказов")
+    orders_created = models.IntegerField(default=0, verbose_name="Создано заказов")
+    orders_updated = models.IntegerField(default=0, verbose_name="Обновлено заказов")
+    orders_failed = models.IntegerField(default=0, verbose_name="Ошибок обработки")
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
+    error_details = models.TextField(blank=True, verbose_name="Детали ошибок")
+    response_data = models.JSONField(default=dict, blank=True, verbose_name="Данные ответа")
+    
+    started_at = models.DateTimeField(auto_now_add=True, verbose_name="Начато")
+    completed_at = models.DateTimeField(null=True, blank=True, verbose_name="Завершено")
+    
+    class Meta:
+        verbose_name = "Лог синхронизации заказов"
+        verbose_name_plural = "Логи синхронизации заказов"
+        ordering = ['-started_at']
+    
+    def __str__(self):
+        return f"Синхронизация {self.sync_type} - {self.status}"
+    
+    def get_success_rate(self):
+        """Получить процент успешности синхронизации"""
+        if self.total_orders_found == 0:
+            return 0
+        successful = self.orders_created + self.orders_updated
+        return round((successful / self.total_orders_found) * 100, 2)
