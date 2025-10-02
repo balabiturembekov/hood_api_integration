@@ -2588,21 +2588,21 @@ class HoodAPIService:
                     }
                 
                 # Обрабатываем ответ согласно документации
-                response_container = root.find('.//response')
-                if response_container is not None:
-                    orders = response_container.findall('.//order')
-                    orders_data = []
-                    
-                    for order in orders:
-                        order_data = self._extract_order_data(order)
+                # Корневой элемент уже response, ищем заказы напрямую
+                orders = root.findall('.//order')
+                orders_data = []
+                
+                for order in orders:
+                    order_data = self._extract_order_data(order)
+                    if order_data:  # Добавляем только если есть данные
                         orders_data.append(order_data)
-                    
-                    return {
-                        'success': True,
-                        'orders': orders_data,
-                        'order_count': len(orders_data),
-                        'raw_response': response.text
-                    }
+                
+                return {
+                    'success': True,
+                    'orders': orders_data,
+                    'order_count': len(orders_data),
+                    'raw_response': response.text
+                }
             
             return {
                 'success': False,
@@ -2630,24 +2630,23 @@ class HoodAPIService:
                 item_data = {}
                 item_fields = [
                     'itemID', 'prodName', 'quantity', 'price', 'weight',
-                    'itemNumber', 'salesTax', 'ean', 'isbn', 'mpn'
+                    'itemNumber', 'salesTax', 'ean', 'isbn', 'mpn', 'shipCost'
                 ]
                 
                 for field in item_fields:
                     element = item.find(field)
-                    if element is not None and element.text:
-                        item_data[field] = element.text
+                    if element is not None:
+                        # Берем текст даже если он пустой
+                        item_data[field] = element.text if element.text else ''
                 
                 if item_data:
                     items.append(item_data)
             
-            if items:
-                order_data['orderItems'] = items
+            order_data['items'] = items  # Изменили ключ на 'items'
         
         # Обработка details (детали заказа)
         details = order_element.find('details')
         if details is not None:
-            details_data = {}
             details_fields = [
                 'orderID', 'quantity', 'date', 'price', 'discount',
                 'shipCost', 'shipMethod', 'shipMethodCode', 'tax',
@@ -2661,16 +2660,13 @@ class HoodAPIService:
             
             for field in details_fields:
                 element = details.find(field)
-                if element is not None and element.text:
-                    details_data[field] = element.text
-            
-            if details_data:
-                order_data['details'] = details_data
+                if element is not None:
+                    # Добавляем данные прямо в order_data, а не в подобъект
+                    order_data[field] = element.text if element.text else ''
         
         # Обработка buyer (информация о покупателе)
         buyer = order_element.find('buyer')
         if buyer is not None:
-            buyer_data = {}
             buyer_fields = [
                 'company', 'companyOwner', 'accountName', 'email',
                 'salutation', 'firstName', 'lastName', 'comment',
@@ -2679,11 +2675,9 @@ class HoodAPIService:
             
             for field in buyer_fields:
                 element = buyer.find(field)
-                if element is not None and element.text:
-                    buyer_data[field] = element.text
-            
-            if buyer_data:
-                order_data['buyer'] = buyer_data
+                if element is not None:
+                    # Добавляем с префиксом buyer
+                    order_data[f'buyer{field.capitalize()}'] = element.text if element.text else ''
         
         # Обработка shipAddress (адрес доставки)
         ship_address = order_element.find('shipAddress')
@@ -2696,11 +2690,9 @@ class HoodAPIService:
             
             for field in address_fields:
                 element = ship_address.find(field)
-                if element is not None and element.text:
-                    address_data[field] = element.text
-            
-            if address_data:
-                order_data['shipAddress'] = address_data
+                if element is not None:
+                    # Добавляем с префиксом shipping
+                    order_data[f'shipping{field.capitalize()}'] = element.text if element.text else ''
         
         # Обработка paymentInfo (информация об оплате) - если есть
         payment_info = order_element.find('paymentInfo')
@@ -2718,6 +2710,10 @@ class HoodAPIService:
             
             if payment_data:
                 order_data['paymentInfo'] = payment_data
+        
+        # Добавляем дату заказа в правильном формате
+        if 'date' in order_data:
+            order_data['orderDate'] = order_data['date']
         
         return order_data
     
@@ -3572,13 +3568,12 @@ class HoodAPIService:
             detail_level_str = ','.join(detail_level)
             xml_parts.append(f'<detailLevel>{detail_level_str}</detailLevel>')
         
-        # Добавляем контейнер items
+        # Добавляем контейнер items (исправленная структура согласно документации)
         xml_parts.append('<items>')
         
+        # Добавляем itemID напрямую в контейнер items (без вложенного <item>)
         for item_id in item_ids:
-            xml_parts.append('<item>')
             xml_parts.append(f'<itemID>{item_id}</itemID>')
-            xml_parts.append('</item>')
         
         xml_parts.append('</items>')
         xml_parts.append('</api>')
@@ -3658,11 +3653,43 @@ class HoodAPIService:
         """Извлечение данных товара из ответа itemStatus"""
         item_data = {}
         
-        # Базовые поля товара
+        # Извлекаем данные из generalInfo
+        general_info = item_element.find('generalInfo')
+        if general_info is not None:
+            general_fields = [
+                'itemID', 'itemName', 'categoryID', 'itemNumber', 'dateFrom', 'dateTo',
+                'condition', 'quantity', 'auctionModeID', 'itemMode', 'link', 'isApproved'
+            ]
+            
+            for field in general_fields:
+                element = general_info.find(field)
+                if element is not None:
+                    item_data[field] = element.text if element.text else ''
+        
+        # Извлекаем данные из priceInfo
+        price_info = item_element.find('priceInfo')
+        if price_info is not None:
+            price_fields = ['price', 'startPrice', 'buyNowPrice', 'shippingCost']
+            
+            for field in price_fields:
+                element = price_info.find(field)
+                if element is not None:
+                    item_data[field] = element.text if element.text else ''
+        
+        # Извлекаем данные из statisticInfo
+        statistic_info = item_element.find('statisticInfo')
+        if statistic_info is not None:
+            stat_fields = ['views', 'bids', 'watchers']
+            
+            for field in stat_fields:
+                element = statistic_info.find(field)
+                if element is not None:
+                    item_data[field] = element.text if element.text else ''
+        
+        # Базовые поля товара (для обратной совместимости)
         basic_fields = [
-            'itemID', 'itemName', 'description', 'price', 'quantity',
-            'condition', 'manufacturer', 'weight', 'categoryID', 'categoryName',
-            'startDate', 'endDate', 'duration', 'status', 'views', 'bids'
+            'description', 'manufacturer', 'weight', 'categoryName',
+            'startDate', 'endDate', 'duration', 'status'
         ]
         
         for field in basic_fields:
@@ -3701,6 +3728,12 @@ class HoodAPIService:
                     properties.append(prop_data)
             if properties:
                 item_data['productProperties'] = properties
+        
+        # Добавляем маппинг для обратной совместимости
+        if 'dateFrom' in item_data and 'startDate' not in item_data:
+            item_data['startDate'] = item_data['dateFrom']
+        if 'dateTo' in item_data and 'endDate' not in item_data:
+            item_data['endDate'] = item_data['dateTo']
         
         return item_data
     
