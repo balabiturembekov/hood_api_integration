@@ -1,0 +1,264 @@
+{% extends 'products/base.html' %}
+{% load static %}
+
+{% block title %}Синхронизация заказов{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sync-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .log-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 10px;
+    }
+    
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        color: white;
+    }
+    .status-pending { background-color: #ffc107; color: #000; }
+    .status-success { background-color: #28a745; }
+    .status-error { background-color: #dc3545; }
+    .status-partial { background-color: #fd7e14; }
+    
+    .form-section {
+        display: none;
+        margin-top: 15px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+    }
+    
+    .form-section.active {
+        display: block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-sync"></i> Синхронизация заказов</h2>
+                <a href="{% url 'orders_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> К списку заказов
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Форма синхронизации -->
+        <div class="col-md-8">
+            <div class="sync-card">
+                <h5><i class="fas fa-download"></i> Синхронизировать заказы с Hood.de</h5>
+                <p class="text-muted">Выберите тип синхронизации и настройте параметры</p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Тип синхронизации:</strong></label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="sync_type" id="recent" value="recent" checked onchange="toggleFormSection('recent')">
+                            <label class="form-check-label" for="recent">
+                                <strong>Последние заказы</strong> - получить заказы за последние N дней
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="sync_type" id="date_range" value="date_range" onchange="toggleFormSection('date_range')">
+                            <label class="form-check-label" for="date_range">
+                                <strong>За период</strong> - получить заказы за определенный период
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="sync_type" id="by_id" value="by_id" onchange="toggleFormSection('by_id')">
+                            <label class="form-check-label" for="by_id">
+                                <strong>По ID заказа</strong> - получить конкретный заказ
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Секция для последних заказов -->
+                    <div id="section_recent" class="form-section active">
+                        <div class="mb-3">
+                            <label for="days" class="form-label">Количество дней:</label>
+                            <select name="days" id="days" class="form-select">
+                                <option value="1">1 день</option>
+                                <option value="3">3 дня</option>
+                                <option value="7" selected>7 дней</option>
+                                <option value="14">14 дней</option>
+                                <option value="30">30 дней</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Секция для периода -->
+                    <div id="section_date_range" class="form-section">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="start_date" class="form-label">Дата начала:</label>
+                                    <input type="date" name="start_date" id="start_date" class="form-control">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="end_date" class="form-label">Дата окончания:</label>
+                                    <input type="date" name="end_date" id="end_date" class="form-control">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Секция для конкретного заказа -->
+                    <div id="section_by_id" class="form-section">
+                        <div class="mb-3">
+                            <label for="order_id" class="form-label">ID заказа Hood.de:</label>
+                            <input type="text" name="order_id" id="order_id" class="form-control" placeholder="Введите ID заказа">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-sync"></i> Начать синхронизацию
+                    </button>
+                </form>
+            </div>
+
+            <!-- Инструкции -->
+            <div class="sync-card">
+                <h5><i class="fas fa-info-circle"></i> Информация</h5>
+                <div class="alert alert-info">
+                    <h6>Как работает синхронизация:</h6>
+                    <ul class="mb-0">
+                        <li><strong>Последние заказы</strong> - получает заказы за указанное количество дней от текущей даты</li>
+                        <li><strong>За период</strong> - получает заказы между указанными датами</li>
+                        <li><strong>По ID заказа</strong> - получает информацию о конкретном заказе</li>
+                    </ul>
+                </div>
+                <div class="alert alert-warning">
+                    <h6>Важно:</h6>
+                    <ul class="mb-0">
+                        <li>Синхронизация может занять некоторое время в зависимости от количества заказов</li>
+                        <li>Существующие заказы будут обновлены новыми данными</li>
+                        <li>Все операции логируются для отслеживания</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- История синхронизации -->
+        <div class="col-md-4">
+            <div class="sync-card">
+                <h5><i class="fas fa-history"></i> Последние синхронизации</h5>
+                {% if recent_sync_logs %}
+                    {% for log in recent_sync_logs %}
+                    <div class="log-card">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong>{{ log.get_sync_type_display }}</strong>
+                            <span class="status-badge status-{{ log.status }}">
+                                {{ log.get_status_display }}
+                            </span>
+                        </div>
+                        
+                        <div class="row text-sm">
+                            <div class="col-6">
+                                <small class="text-muted">Найдено:</small><br>
+                                <strong>{{ log.total_orders_found }}</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Создано:</small><br>
+                                <strong class="text-success">{{ log.orders_created }}</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="row text-sm mt-1">
+                            <div class="col-6">
+                                <small class="text-muted">Обновлено:</small><br>
+                                <strong class="text-info">{{ log.orders_updated }}</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Ошибок:</small><br>
+                                <strong class="text-danger">{{ log.orders_failed }}</strong>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                {{ log.started_at|date:"d.m.Y H:i" }}
+                                {% if log.completed_at %}
+                                    - {{ log.completed_at|date:"H:i" }}
+                                {% endif %}
+                            </small>
+                        </div>
+                        
+                        {% if log.error_details %}
+                        <div class="mt-2">
+                            <small class="text-danger">{{ log.error_details|truncatechars:100 }}</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">Синхронизации еще не выполнялись</p>
+                {% endif %}
+            </div>
+
+            <!-- Статистика API -->
+            <div class="sync-card">
+                <h5><i class="fas fa-chart-line"></i> Статистика</h5>
+                <p><strong>Доступные функции Hood.de API:</strong></p>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success"></i> orderList - получение заказов</li>
+                    <li><i class="fas fa-check text-success"></i> Фильтрация по датам</li>
+                    <li><i class="fas fa-check text-success"></i> Получение по ID</li>
+                    <li><i class="fas fa-check text-success"></i> Автоматическое обновление</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleFormSection(sectionType) {
+    // Скрываем все секции
+    document.querySelectorAll('.form-section').forEach(section => {
+        section.classList.remove('active');
+    });
+    
+    // Показываем выбранную секцию
+    const targetSection = document.getElementById('section_' + sectionType);
+    if (targetSection) {
+        targetSection.classList.add('active');
+    }
+}
+
+// Устанавливаем сегодняшнюю дату как максимальную для полей дат
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('start_date').max = today;
+    document.getElementById('end_date').max = today;
+    
+    // Устанавливаем дату окончания на сегодня по умолчанию
+    document.getElementById('end_date').value = today;
+    
+    // Устанавливаем дату начала на неделю назад
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    document.getElementById('start_date').value = weekAgo.toISOString().split('T')[0];
+});
+</script>
+{% endblock %}

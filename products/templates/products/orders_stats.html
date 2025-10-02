@@ -1,0 +1,259 @@
+{% extends 'products/base.html' %}
+{% load static %}
+
+{% block title %}Статистика заказов{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    
+    .stats-card h3 {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+    
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: bold;
+        color: white;
+        display: inline-block;
+        margin-bottom: 10px;
+    }
+    .status-new { background-color: #007bff; }
+    .status-paid { background-color: #28a745; }
+    .status-shipped { background-color: #17a2b8; }
+    .status-delivered { background-color: #28a745; }
+    .status-cancelled { background-color: #dc3545; }
+    .status-returned { background-color: #ffc107; color: #000; }
+    .status-refunded { background-color: #6c757d; }
+    
+    .progress-bar-custom {
+        height: 25px;
+        border-radius: 12px;
+        font-weight: bold;
+    }
+    
+    .buyer-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 10px;
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-chart-bar"></i> Статистика заказов</h2>
+                <div>
+                    <a href="{% url 'orders_list' %}" class="btn btn-primary">
+                        <i class="fas fa-list"></i> Список заказов
+                    </a>
+                    <a href="{% url 'sync_orders' %}" class="btn btn-success">
+                        <i class="fas fa-sync"></i> Синхронизировать
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Общая статистика -->
+    <div class="row">
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-shopping-cart fa-2x text-primary mb-3"></i>
+                <h3 class="text-primary">{{ total_orders }}</h3>
+                <p class="mb-0">Всего заказов</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-euro-sign fa-2x text-success mb-3"></i>
+                <h3 class="text-success">€{{ total_amount|floatformat:0 }}</h3>
+                <p class="mb-0">Общая сумма</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-calendar-day fa-2x text-info mb-3"></i>
+                <h3 class="text-info">{{ period_stats.today }}</h3>
+                <p class="mb-0">Сегодня</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card">
+                <i class="fas fa-calendar-week fa-2x text-warning mb-3"></i>
+                <h3 class="text-warning">{{ period_stats.week }}</h3>
+                <p class="mb-0">За неделю</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Статистика по статусам -->
+        <div class="col-md-8">
+            <div class="stats-card text-left">
+                <h5><i class="fas fa-chart-pie"></i> Распределение по статусам</h5>
+                {% for status in status_stats %}
+                    {% if status.count > 0 %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="status-badge status-{{ status.code }}">
+                                {{ status.name }}
+                            </span>
+                            <span><strong>{{ status.count }}</strong> ({{ status.percentage }}%)</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-custom" 
+                                 style="width: {{ status.percentage }}%; background-color: 
+                                 {% if status.code == 'new' %}#007bff{% elif status.code == 'paid' %}#28a745{% elif status.code == 'shipped' %}#17a2b8{% elif status.code == 'delivered' %}#28a745{% elif status.code == 'cancelled' %}#dc3545{% elif status.code == 'returned' %}#ffc107{% else %}#6c757d{% endif %};">
+                                {{ status.percentage }}%
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Статистика по периодам -->
+        <div class="col-md-4">
+            <div class="stats-card">
+                <h5><i class="fas fa-calendar-alt"></i> По периодам</h5>
+                <div class="mb-3">
+                    <h4 class="text-info">{{ period_stats.today }}</h4>
+                    <p class="mb-0">Заказов сегодня</p>
+                </div>
+                <div class="mb-3">
+                    <h4 class="text-primary">{{ period_stats.week }}</h4>
+                    <p class="mb-0">За последние 7 дней</p>
+                </div>
+                <div class="mb-0">
+                    <h4 class="text-success">{{ period_stats.month }}</h4>
+                    <p class="mb-0">За последние 30 дней</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Топ покупатели -->
+        <div class="col-md-6">
+            <div class="stats-card text-left">
+                <h5><i class="fas fa-users"></i> Топ покупатели</h5>
+                {% if top_buyers %}
+                    {% for buyer in top_buyers %}
+                    <div class="buyer-card">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">{{ buyer.buyer_username }}</h6>
+                                {% if buyer.buyer_name %}
+                                    <small class="text-muted">{{ buyer.buyer_name }}</small>
+                                {% endif %}
+                            </div>
+                            <div class="text-right">
+                                <div class="text-success font-weight-bold">€{{ buyer.total_spent|floatformat:2 }}</div>
+                                <small class="text-muted">{{ buyer.orders_count }} заказ(ов)</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">Данные о покупателях отсутствуют</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Статистика по способам оплаты -->
+        <div class="col-md-6">
+            <div class="stats-card text-left">
+                <h5><i class="fas fa-credit-card"></i> Способы оплаты</h5>
+                {% if payment_stats %}
+                    {% for payment in payment_stats %}
+                        {% if payment.payment_method %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>
+                                <i class="fas fa-credit-card text-primary"></i>
+                                {{ payment.payment_method|default:"Не указан" }}
+                            </span>
+                            <span class="badge badge-primary">{{ payment.count }}</span>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">Данные о способах оплаты отсутствуют</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Дополнительная информация -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="stats-card text-left">
+                <h5><i class="fas fa-info-circle"></i> Дополнительная информация</h5>
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6>Средний чек</h6>
+                        <p class="text-success h4">
+                            €{{ average_order_value|floatformat:2 }}
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Статусы заказов</h6>
+                        <p>{{ status_stats|length }} различных статусов</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6>Активность</h6>
+                        <p>
+                            {% if period_stats.today > 0 %}
+                                <span class="text-success">Активно</span> - {{ period_stats.today }} заказов сегодня
+                            {% else %}
+                                <span class="text-muted">Нет заказов сегодня</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mt-3">
+                    <h6><i class="fas fa-lightbulb"></i> Рекомендации:</h6>
+                    <ul class="mb-0">
+                        {% if period_stats.today == 0 %}
+                            <li>Сегодня новых заказов нет - проверьте синхронизацию с Hood.de</li>
+                        {% endif %}
+                        {% for status in status_stats %}
+                            {% if status.code == 'new' and status.count > 5 %}
+                                <li>У вас {{ status.count }} новых заказов - требуется обработка</li>
+                            {% endif %}
+                            {% if status.code == 'paid' and status.count > 0 %}
+                                <li>{{ status.count }} оплаченных заказов готовы к отправке</li>
+                            {% endif %}
+                        {% endfor %}
+                        <li>Регулярно синхронизируйте заказы для актуальной информации</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

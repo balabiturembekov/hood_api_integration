@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.db.models import Q
 from .services import HoodAPIService
-from .models import Product, HoodCategory, UploadLog, BulkUpload, ImportLog
+from .models import Product, HoodCategory, UploadLog, BulkUpload, ImportLog, Order, OrderItem, OrderSyncLog
 import json
 import logging
 import csv
@@ -27,17 +27,29 @@ def public_home(request):
 @login_required
 def dashboard(request):
     """Главная страница дашборда"""
-    # Статистика
+    from django.db.models import Sum
+    
+    # Статистика продуктов
     total_products = Product.objects.count()
     uploaded_products = Product.objects.filter(is_uploaded_to_hood=True).count()
     active_products = Product.objects.filter(is_approved='yes').count()
     total_categories = HoodCategory.objects.count()
+    
+    # Статистика заказов
+    total_orders = Order.objects.count()
+    new_orders = Order.objects.filter(status='new').count()
+    today = timezone.now().date()
+    today_orders = Order.objects.filter(order_date__date=today).count()
+    total_revenue = Order.objects.aggregate(total=Sum('total_amount'))['total'] or 0
     
     # Последние продукты
     recent_products = Product.objects.select_related('hood_category', 'created_by').order_by('-created_at')[:10]
     
     # Последние загрузки
     recent_uploads = UploadLog.objects.select_related('product').order_by('-created_at')[:5]
+    
+    # Последние заказы
+    recent_orders = Order.objects.order_by('-order_date')[:5]
     
     # Проверка соединения с Hood.de API
     hood_service = HoodAPIService()
@@ -48,9 +60,14 @@ def dashboard(request):
         'uploaded_products': uploaded_products,
         'active_products': active_products,
         'total_categories': total_categories,
+        'total_orders': total_orders,
+        'new_orders': new_orders,
+        'today_orders': today_orders,
+        'total_revenue': total_revenue,
         'upload_percentage': (uploaded_products / total_products * 100) if total_products > 0 else 0,
         'recent_products': recent_products,
         'recent_uploads': recent_uploads,
+        'recent_orders': recent_orders,
         'api_connection': api_connection,
     }
     
@@ -607,10 +624,10 @@ def hood_item_status(request, item_id):
                         item['price_formatted'] = item['price']
                 
                 # Форматируем даты
-                if item.get('startDate'):
-                    item['start_date_formatted'] = format_date(item['startDate'])
-                if item.get('endDate'):
-                    item['end_date_formatted'] = format_date(item['endDate'])
+                if item.get('dateFrom'):
+                    item['start_date_formatted'] = format_date(item['dateFrom'])
+                if item.get('dateTo'):
+                    item['end_date_formatted'] = format_date(item['dateTo'])
             else:
                 messages.error(request, 'Товар не найден в ответе API')
                 return redirect('hood_items_list')
@@ -738,6 +755,31 @@ def hood_items_compare(request):
         }
         
         return render(request, 'products/hood_items_compare.html', context)
+    
+    else:
+        # GET запрос - показываем форму для выбора товаров для сравнения
+        try:
+            hood_service = HoodAPIService()
+            
+            # Получаем список товаров для выбора
+            result = hood_service.get_item_list('running', 1, 50)
+            
+            if result.get('success'):
+                items = result.get('items', [])
+            else:
+                items = []
+                messages.warning(request, f'Не удалось загрузить список товаров: {result.get("error", "Неизвестная ошибка")}')
+            
+            context = {
+                'items': items,
+                'page_title': 'Сравнение товаров Hood.de',
+            }
+            
+            return render(request, 'products/hood_items_compare_form.html', context)
+            
+        except Exception as e:
+            messages.error(request, f'Ошибка загрузки товаров: {str(e)}')
+            return redirect('hood_items_list')
 
 
 @login_required
@@ -1063,3 +1105,376 @@ def format_date(date_str):
         return date_str
     except:
         return date_str
+
+
+# ==================== ЗАКАЗЫ ====================
+
+@login_required
+def orders_list(request):
+    """Список заказов"""
+    orders = Order.objects.prefetch_related('items').order_by('-order_date')
+    
+    # Фильтрация
+    status_filter = request.GET.get('status')
+    if status_filter:
+        orders = orders.filter(status=status_filter)
+    
+    buyer_filter = request.GET.get('buyer')
+    if buyer_filter:
+        orders = orders.filter(buyer_username__icontains=buyer_filter)
+    
+    search = request.GET.get('search')
+    if search:
+        orders = orders.filter(
+            Q(hood_order_id__icontains=search) |
+            Q(order_number__icontains=search) |
+            Q(buyer_username__icontains=search) |
+            Q(buyer_name__icontains=search)
+        )
+    
+    # Пагинация
+    paginator = Paginator(orders, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Статистика для фильтров
+    status_stats = {}
+    for status_code, status_name in Order.STATUS_CHOICES:
+        count = Order.objects.filter(status=status_code).count()
+        status_stats[status_code] = {'name': status_name, 'count': count}
+    
+    context = {
+        'page_obj': page_obj,
+        'status_stats': status_stats,
+        'current_status': status_filter,
+        'current_buyer': buyer_filter,
+        'current_search': search,
+        'total_orders': Order.objects.count(),
+    }
+    
+    return render(request, 'products/orders_list.html', context)
+
+
+@login_required
+def order_detail(request, pk):
+    """Детали заказа"""
+    try:
+        order = Order.objects.prefetch_related('items__product', 'status_history__changed_by').get(pk=pk)
+    except Order.DoesNotExist:
+        messages.error(request, 'Заказ не найден')
+        return redirect('orders_list')
+    
+    context = {
+        'order': order,
+        'items': order.items.all(),
+        'status_history': order.status_history.all()[:10],  # Последние 10 изменений
+    }
+    
+    return render(request, 'products/order_detail.html', context)
+
+
+@login_required
+def sync_orders(request):
+    """Синхронизация заказов с Hood.de"""
+    if request.method == 'POST':
+        sync_type = request.POST.get('sync_type', 'recent')
+        days = int(request.POST.get('days', 7))
+        start_date = request.POST.get('start_date')
+        end_date = request.POST.get('end_date')
+        order_id = request.POST.get('order_id')
+        
+        # Создаем лог синхронизации
+        sync_log = OrderSyncLog.objects.create(
+            sync_type=sync_type,
+            start_date=start_date if start_date else None,
+            end_date=end_date if end_date else None,
+            status='pending'
+        )
+        
+        try:
+            hood_service = HoodAPIService()
+            
+            # Выбираем метод синхронизации
+            if sync_type == 'recent':
+                result = hood_service.get_recent_orders(days=days)
+            elif sync_type == 'date_range' and start_date and end_date:
+                result = hood_service.get_orders_by_date_range(
+                    start_date=start_date,
+                    end_date=end_date
+                )
+            elif sync_type == 'by_id' and order_id:
+                result = hood_service.get_order_by_id(order_id)
+            else:
+                raise ValueError("Неправильные параметры синхронизации")
+            
+            if not result.get('success'):
+                sync_log.status = 'error'
+                sync_log.error_details = result.get('error', 'Неизвестная ошибка')
+                sync_log.completed_at = timezone.now()
+                sync_log.save()
+                
+                messages.error(request, f"Ошибка синхронизации: {result.get('error')}")
+                return redirect('sync_orders')
+            
+            # Обрабатываем полученные заказы
+            orders_data = result.get('orders', [])
+            sync_log.total_orders_found = len(orders_data)
+            
+            created_count = 0
+            updated_count = 0
+            failed_count = 0
+            
+            for order_data in orders_data:
+                try:
+                    hood_order_id = order_data.get('orderID', '')
+                    if not hood_order_id:
+                        failed_count += 1
+                        continue
+                    
+                    # Извлекаем данные заказа
+                    order_fields = _extract_order_fields_web(order_data)
+                    
+                    # Проверяем, существует ли заказ
+                    order, created = Order.objects.get_or_create(
+                        hood_order_id=hood_order_id,
+                        defaults=order_fields
+                    )
+                    
+                    if created:
+                        created_count += 1
+                        # Создаем товары заказа
+                        _create_order_items_web(order, order_data.get('items', []))
+                    else:
+                        # Обновляем существующий заказ
+                        for field, value in order_fields.items():
+                            setattr(order, field, value)
+                        order.synced_at = timezone.now()
+                        order.save()
+                        updated_count += 1
+                        
+                        # Обновляем товары заказа
+                        order.items.all().delete()
+                        _create_order_items_web(order, order_data.get('items', []))
+                
+                except Exception as e:
+                    logger.error(f"Ошибка обработки заказа {hood_order_id}: {str(e)}")
+                    failed_count += 1
+            
+            # Обновляем лог синхронизации
+            sync_log.orders_created = created_count
+            sync_log.orders_updated = updated_count
+            sync_log.orders_failed = failed_count
+            sync_log.status = 'success' if failed_count == 0 else 'partial'
+            sync_log.response_data = result
+            sync_log.completed_at = timezone.now()
+            sync_log.save()
+            
+            messages.success(
+                request, 
+                f'Синхронизация завершена! Создано: {created_count}, Обновлено: {updated_count}, Ошибок: {failed_count}'
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка синхронизации заказов: {str(e)}")
+            sync_log.status = 'error'
+            sync_log.error_details = str(e)
+            sync_log.completed_at = timezone.now()
+            sync_log.save()
+            
+            messages.error(request, f'Ошибка синхронизации: {str(e)}')
+        
+        return redirect('sync_orders')
+    
+    # GET запрос - показываем форму синхронизации
+    recent_sync_logs = OrderSyncLog.objects.order_by('-started_at')[:10]
+    
+    context = {
+        'recent_sync_logs': recent_sync_logs,
+    }
+    
+    return render(request, 'products/sync_orders.html', context)
+
+
+@login_required
+def orders_stats(request):
+    """Статистика заказов"""
+    from django.db.models import Sum, Count
+    from datetime import datetime, timedelta
+    
+    total_orders = Order.objects.count()
+    total_amount = Order.objects.aggregate(total=Sum('total_amount'))['total'] or 0
+    
+    # Статистика по статусам
+    status_stats = []
+    for status_code, status_name in Order.STATUS_CHOICES:
+        count = Order.objects.filter(status=status_code).count()
+        percentage = (count / total_orders * 100) if total_orders > 0 else 0
+        status_stats.append({
+            'code': status_code,
+            'name': status_name,
+            'count': count,
+            'percentage': round(percentage, 1)
+        })
+    
+    # Статистика по периодам
+    now = timezone.now()
+    today_orders = Order.objects.filter(order_date__date=now.date()).count()
+    week_orders = Order.objects.filter(order_date__gte=now - timedelta(days=7)).count()
+    month_orders = Order.objects.filter(order_date__gte=now - timedelta(days=30)).count()
+    
+    # Топ покупатели
+    top_buyers = Order.objects.values('buyer_username', 'buyer_name').annotate(
+        orders_count=Count('id'),
+        total_spent=Sum('total_amount')
+    ).order_by('-total_spent')[:10]
+    
+    # Статистика по способам оплаты
+    payment_stats = Order.objects.values('payment_method').annotate(
+        count=Count('id')
+    ).order_by('-count')
+    
+    # Средний чек
+    average_order_value = (total_amount / total_orders) if total_orders > 0 else 0
+    
+    context = {
+        'total_orders': total_orders,
+        'total_amount': total_amount,
+        'average_order_value': average_order_value,
+        'status_stats': status_stats,
+        'period_stats': {
+            'today': today_orders,
+            'week': week_orders,
+            'month': month_orders
+        },
+        'top_buyers': top_buyers,
+        'payment_stats': payment_stats,
+    }
+    
+    return render(request, 'products/orders_stats.html', context)
+
+
+def _extract_order_fields_web(order_data):
+    """Извлекает поля заказа из данных Hood.de API для веб-интерфейса"""
+    from datetime import datetime
+    
+    # Парсим дату заказа (новый формат с {ts '...'})
+    order_date_str = order_data.get('date', order_data.get('orderDate', ''))
+    order_date = timezone.now()
+    
+    if order_date_str:
+        try:
+            # Убираем {ts ' и '} из даты
+            clean_date = order_date_str.replace('{ts \'', '').replace('\'}', '')
+            naive_date = datetime.strptime(clean_date, '%Y-%m-%d %H:%M:%S')
+            # Делаем дату timezone-aware
+            order_date = timezone.make_aware(naive_date)
+        except ValueError:
+            try:
+                naive_date = datetime.strptime(clean_date, '%Y-%m-%d')
+                order_date = timezone.make_aware(naive_date)
+            except ValueError:
+                order_date = timezone.now()
+    
+    # Определяем статус заказа на основе статусов покупателя и продавца
+    buyer_status = order_data.get('orderStatusActionBuyer', '').lower()
+    seller_status = order_data.get('orderStatusActionSeller', '').lower()
+    shipping_status = order_data.get('shippingStatusCode', '').lower()
+    
+    # Маппинг статусов
+    if buyer_status == 'payed' and seller_status == 'payed':
+        status = 'paid'
+    elif buyer_status == 'payed':
+        status = 'paid'
+    elif 'cancel' in buyer_status or 'cancel' in seller_status:
+        status = 'cancelled'
+    elif 'refund' in buyer_status:
+        status = 'refunded'
+    elif 'shipped' in shipping_status:
+        status = 'shipped'
+    elif 'received' in shipping_status:
+        status = 'delivered'
+    else:
+        status = 'new'
+    
+    return {
+        'order_number': order_data.get('orderNumber', ''),
+        'status': status,
+        'buyer_username': order_data.get('buyerAccountName', order_data.get('accountName', '')),
+        'buyer_email': order_data.get('buyerEmail', ''),
+        'buyer_name': f"{order_data.get('buyerFirstName', '')} {order_data.get('buyerLastName', '')}".strip(),
+        'shipping_name': f"{order_data.get('shippingFirstName', '')} {order_data.get('shippingLastName', '')}".strip(),
+        'shipping_company': order_data.get('shippingCompany', ''),
+        'shipping_address1': order_data.get('shippingAddress', ''),
+        'shipping_address2': '',
+        'shipping_city': order_data.get('shippingCity', ''),
+        'shipping_state': '',
+        'shipping_postal_code': order_data.get('shippingZip', ''),
+        'shipping_country': order_data.get('shippingCountry', ''),
+        'shipping_phone': order_data.get('shippingPhone', ''),
+        'subtotal': float(order_data.get('price', 0)),
+        'shipping_cost': float(order_data.get('shipCost', 0)),
+        'tax_amount': float(order_data.get('taxTotalValue', 0)),
+        'total_amount': float(order_data.get('price', 0)) + float(order_data.get('shipCost', 0)),
+        'payment_method': _map_payment_method_web(order_data.get('paymentTypeCode', '')),
+        'payment_status': order_data.get('paymentStatus', ''),
+        'shipping_method': order_data.get('shipMethod', ''),
+        'tracking_number': '',
+        'notes': order_data.get('comments', ''),
+        'order_date': order_date,
+        'synced_at': timezone.now(),
+    }
+
+
+def _map_payment_method_web(payment_code):
+    """Маппинг кодов способов оплаты для веб-интерфейса"""
+    mapping = {
+        'wireTransfer': 'wireTransfer',
+        'payPal': 'payPal', 
+        'hoodPay': 'hoodPay',
+        'cash': 'cash',
+        'invoice': 'invoice',
+        'cashOnDelivery': 'cashOnDelivery',
+        'sofort': 'sofort',
+        'amazon': 'amazon',
+        'klarna': 'klarna',
+    }
+    return mapping.get(payment_code, payment_code)
+
+
+def _map_hood_status_web(hood_status):
+    """Маппинг статусов Hood.de в наши статусы для веб-интерфейса"""
+    status_mapping = {
+        'new': 'new',
+        'paid': 'paid',
+        'shipped': 'shipped',
+        'delivered': 'delivered',
+        'cancelled': 'cancelled',
+        'returned': 'returned',
+        'refunded': 'refunded',
+    }
+    return status_mapping.get(hood_status.lower(), 'new')
+
+
+def _create_order_items_web(order, items_data):
+    """Создает товары заказа для веб-интерфейса"""
+    for item_data in items_data:
+        # Пытаемся найти продукт по hood_item_id
+        product = None
+        hood_item_id = item_data.get('itemID', '')
+        if hood_item_id:
+            try:
+                product = Product.objects.get(hood_item_id=hood_item_id)
+            except Product.DoesNotExist:
+                pass
+        
+        OrderItem.objects.create(
+            order=order,
+            product=product,
+            hood_item_id=hood_item_id,
+            item_title=item_data.get('prodName', ''),
+            item_sku=item_data.get('itemNumber', ''),
+            item_ean=item_data.get('ean', ''),
+            quantity=int(item_data.get('quantity', 1)),
+            unit_price=float(item_data.get('price', 0)),
+            variant_details={}
+        )

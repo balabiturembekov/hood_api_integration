@@ -1,0 +1,316 @@
+{% extends 'products/base.html' %}
+{% load static %}
+
+{% block title %}Заказ #{{ order.hood_order_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: bold;
+        color: white;
+    }
+    .status-new { background-color: #007bff; }
+    .status-paid { background-color: #28a745; }
+    .status-shipped { background-color: #17a2b8; }
+    .status-delivered { background-color: #28a745; }
+    .status-cancelled { background-color: #dc3545; }
+    .status-returned { background-color: #ffc107; color: #000; }
+    .status-refunded { background-color: #6c757d; }
+    
+    .info-card {
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .item-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        padding: 15px;
+        margin-bottom: 10px;
+    }
+    
+    .timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 20px;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -23px;
+        top: 5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #007bff;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2><i class="fas fa-shopping-cart"></i> Заказ #{{ order.hood_order_id }}</h2>
+                    {% if order.order_number %}
+                        <p class="text-muted mb-0">Номер заказа: {{ order.order_number }}</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <span class="status-badge status-{{ order.status }}">
+                        {{ order.get_status_display }}
+                    </span>
+                    <a href="{% url 'orders_list' %}" class="btn btn-secondary ml-2">
+                        <i class="fas fa-arrow-left"></i> Назад к списку
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Основная информация -->
+        <div class="col-md-8">
+            <!-- Информация о заказе -->
+            <div class="info-card">
+                <h5><i class="fas fa-info-circle"></i> Информация о заказе</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Дата заказа:</strong> {{ order.order_date|date:"d.m.Y H:i" }}</p>
+                        <p><strong>Статус:</strong> 
+                            <span class="status-badge status-{{ order.status }}">
+                                {{ order.get_status_display }}
+                            </span>
+                        </p>
+                        {% if order.payment_method %}
+                            <p><strong>Способ оплаты:</strong> {{ order.get_payment_method_display }}</p>
+                        {% endif %}
+                        {% if order.payment_status %}
+                            <p><strong>Статус платежа:</strong> {{ order.payment_status }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        {% if order.shipping_method %}
+                            <p><strong>Способ доставки:</strong> {{ order.shipping_method }}</p>
+                        {% endif %}
+                        {% if order.tracking_number %}
+                            <p><strong>Номер отслеживания:</strong> {{ order.tracking_number }}</p>
+                        {% endif %}
+                        {% if order.synced_at %}
+                            <p><strong>Последняя синхронизация:</strong> {{ order.synced_at|date:"d.m.Y H:i" }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Информация о покупателе -->
+            <div class="info-card">
+                <h5><i class="fas fa-user"></i> Покупатель</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Имя пользователя:</strong> {{ order.buyer_username }}</p>
+                        {% if order.buyer_name %}
+                            <p><strong>Полное имя:</strong> {{ order.buyer_name }}</p>
+                        {% endif %}
+                        {% if order.buyer_email %}
+                            <p><strong>Email:</strong> {{ order.buyer_email }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Адрес доставки -->
+            {% if order.shipping_name or order.shipping_address1 %}
+            <div class="info-card">
+                <h5><i class="fas fa-shipping-fast"></i> Адрес доставки</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        {% if order.shipping_name %}
+                            <p><strong>Получатель:</strong> {{ order.shipping_name }}</p>
+                        {% endif %}
+                        {% if order.shipping_company %}
+                            <p><strong>Компания:</strong> {{ order.shipping_company }}</p>
+                        {% endif %}
+                        {% if order.shipping_address1 %}
+                            <p><strong>Адрес:</strong> {{ order.shipping_address1 }}</p>
+                        {% endif %}
+                        {% if order.shipping_address2 %}
+                            <p>{{ order.shipping_address2 }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        {% if order.shipping_city %}
+                            <p><strong>Город:</strong> {{ order.shipping_city }}</p>
+                        {% endif %}
+                        {% if order.shipping_postal_code %}
+                            <p><strong>Индекс:</strong> {{ order.shipping_postal_code }}</p>
+                        {% endif %}
+                        {% if order.shipping_country %}
+                            <p><strong>Страна:</strong> {{ order.shipping_country }}</p>
+                        {% endif %}
+                        {% if order.shipping_phone %}
+                            <p><strong>Телефон:</strong> {{ order.shipping_phone }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Товары в заказе -->
+            <div class="info-card">
+                <h5><i class="fas fa-boxes"></i> Товары в заказе ({{ items.count }})</h5>
+                {% for item in items %}
+                <div class="item-card">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h6 class="mb-1">{{ item.item_title }}</h6>
+                            {% if item.item_sku %}
+                                <p class="mb-1"><small class="text-muted">Артикул: {{ item.item_sku }}</small></p>
+                            {% endif %}
+                            {% if item.item_ean %}
+                                <p class="mb-1"><small class="text-muted">EAN: {{ item.item_ean }}</small></p>
+                            {% endif %}
+                            {% if item.product %}
+                                <p class="mb-0">
+                                    <a href="{% url 'product_detail' item.product.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i> Посмотреть продукт
+                                    </a>
+                                </p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3 text-center">
+                            <p class="mb-0"><strong>Количество:</strong></p>
+                            <h5 class="text-primary">{{ item.quantity }}</h5>
+                        </div>
+                        <div class="col-md-3 text-right">
+                            <p class="mb-0"><strong>Цена за шт.:</strong></p>
+                            <p class="mb-1">€{{ item.unit_price|floatformat:2 }}</p>
+                            <p class="mb-0"><strong>Итого:</strong></p>
+                            <h5 class="text-success">€{{ item.total_price|floatformat:2 }}</h5>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="text-muted">Товары не найдены</p>
+                {% endfor %}
+            </div>
+
+            <!-- Примечания -->
+            {% if order.notes or order.internal_notes %}
+            <div class="info-card">
+                <h5><i class="fas fa-sticky-note"></i> Примечания</h5>
+                {% if order.notes %}
+                    <p><strong>Примечания клиента:</strong></p>
+                    <p>{{ order.notes }}</p>
+                {% endif %}
+                {% if order.internal_notes %}
+                    <p><strong>Внутренние заметки:</strong></p>
+                    <p>{{ order.internal_notes }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Боковая панель -->
+        <div class="col-md-4">
+            <!-- Финансовая информация -->
+            <div class="info-card">
+                <h5><i class="fas fa-euro-sign"></i> Финансы</h5>
+                <table class="table table-sm">
+                    <tr>
+                        <td>Подытог:</td>
+                        <td class="text-right">€{{ order.subtotal|floatformat:2 }}</td>
+                    </tr>
+                    {% if order.shipping_cost > 0 %}
+                    <tr>
+                        <td>Доставка:</td>
+                        <td class="text-right">€{{ order.shipping_cost|floatformat:2 }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if order.tax_amount > 0 %}
+                    <tr>
+                        <td>Налог:</td>
+                        <td class="text-right">€{{ order.tax_amount|floatformat:2 }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr class="table-success">
+                        <td><strong>Итого:</strong></td>
+                        <td class="text-right"><strong>€{{ order.total_amount|floatformat:2 }}</strong></td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- История статусов -->
+            {% if status_history %}
+            <div class="info-card">
+                <h5><i class="fas fa-history"></i> История статусов</h5>
+                <div class="timeline">
+                    {% for history in status_history %}
+                    <div class="timeline-item">
+                        <div class="d-flex justify-content-between">
+                            <strong>{{ history.get_new_status_display }}</strong>
+                            <small class="text-muted">{{ history.changed_at|date:"d.m.Y H:i" }}</small>
+                        </div>
+                        {% if history.old_status %}
+                            <small class="text-muted">Было: {{ history.get_old_status_display }}</small>
+                        {% endif %}
+                        {% if history.changed_by %}
+                            <div><small class="text-muted">Изменил: {{ history.changed_by.username }}</small></div>
+                        {% endif %}
+                        {% if history.change_reason %}
+                            <div><small>{{ history.change_reason }}</small></div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Даты -->
+            <div class="info-card">
+                <h5><i class="fas fa-calendar"></i> Важные даты</h5>
+                <p><strong>Заказ создан:</strong><br>{{ order.order_date|date:"d.m.Y H:i" }}</p>
+                {% if order.payment_date %}
+                    <p><strong>Оплачен:</strong><br>{{ order.payment_date|date:"d.m.Y H:i" }}</p>
+                {% endif %}
+                {% if order.shipped_date %}
+                    <p><strong>Отправлен:</strong><br>{{ order.shipped_date|date:"d.m.Y H:i" }}</p>
+                {% endif %}
+                {% if order.delivered_date %}
+                    <p><strong>Доставлен:</strong><br>{{ order.delivered_date|date:"d.m.Y H:i" }}</p>
+                {% endif %}
+                <p><strong>Добавлен в систему:</strong><br>{{ order.created_at|date:"d.m.Y H:i" }}</p>
+                {% if order.synced_at %}
+                    <p><strong>Последняя синхронизация:</strong><br>{{ order.synced_at|date:"d.m.Y H:i" }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
