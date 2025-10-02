@@ -105,11 +105,11 @@
                 <table class="table table-borderless">
                     <tr>
                         <td><strong>Дата начала:</strong></td>
-                        <td>{{ item.start_date_formatted|default:item.startDate|default:'N/A' }}</td>
+                        <td>{{ item.start_date_formatted|default:item.dateFrom|default:'N/A' }}</td>
                     </tr>
                     <tr>
                         <td><strong>Дата окончания:</strong></td>
-                        <td>{{ item.end_date_formatted|default:item.endDate|default:'N/A' }}</td>
+                        <td>{{ item.end_date_formatted|default:item.dateTo|default:'N/A' }}</td>
                     </tr>
                     <tr>
                         <td><strong>Длительность:</strong></td>

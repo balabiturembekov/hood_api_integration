@@ -1,0 +1,191 @@
+{% extends 'products/base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.item-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.item-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.item-card.selected {
+    border: 2px solid #007bff;
+    background-color: #f8f9fa;
+}
+
+.item-checkbox {
+    transform: scale(1.2);
+}
+
+.compare-button {
+    position: sticky;
+    bottom: 20px;
+    z-index: 1000;
+}
+
+.selected-count {
+    background: #007bff;
+    color: white;
+    border-radius: 50%;
+    padding: 2px 8px;
+    font-size: 0.8em;
+    margin-left: 5px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-balance-scale"></i> {{ page_title }}</h2>
+                <div>
+                    <a href="{% url 'hood_items_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Назад к списку
+                    </a>
+                </div>
+            </div>
+
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-square"></i> Выберите товары для сравнения
+                        <span class="selected-count" id="selectedCount">0</span>
+                    </h5>
+                    <small class="text-muted">Выберите минимум 2 товара для сравнения</small>
+                </div>
+                <div class="card-body">
+                    {% if items %}
+                        <form method="post" id="compareForm">
+                            {% csrf_token %}
+                            
+                            <div class="row">
+                                {% for item in items %}
+                                    <div class="col-md-4 col-lg-3 mb-3">
+                                        <div class="card item-card h-100" onclick="toggleItem('{{ item.itemID }}')">
+                                            <div class="card-body">
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input item-checkbox" 
+                                                           type="checkbox" 
+                                                           name="item_ids" 
+                                                           value="{{ item.itemID }}" 
+                                                           id="item_{{ item.itemID }}"
+                                                           onchange="updateSelection()">
+                                                    <label class="form-check-label fw-bold" for="item_{{ item.itemID }}">
+                                                        ID: {{ item.itemID }}
+                                                    </label>
+                                                </div>
+                                                
+                                                <h6 class="card-title">
+                                                    {{ item.itemName|default:"Без названия"|truncatechars:50 }}
+                                                </h6>
+                                                
+                                                <div class="small text-muted">
+                                                    {% if item.price %}
+                                                        <div><strong>Цена:</strong> {{ item.price }} €</div>
+                                                    {% endif %}
+                                                    {% if item.condition %}
+                                                        <div><strong>Состояние:</strong> {{ item.condition }}</div>
+                                                    {% endif %}
+                                                    {% if item.quantity %}
+                                                        <div><strong>Количество:</strong> {{ item.quantity }}</div>
+                                                    {% endif %}
+                                                    {% if item.categoryID %}
+                                                        <div><strong>Категория:</strong> {{ item.categoryID }}</div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="compare-button text-center mt-4">
+                                <button type="submit" class="btn btn-primary btn-lg" id="compareBtn" disabled>
+                                    <i class="fas fa-balance-scale"></i> Сравнить выбранные товары
+                                </button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                            <h4>Нет товаров для сравнения</h4>
+                            <p class="text-muted">Не удалось загрузить список товаров с Hood.de</p>
+                            <a href="{% url 'hood_items_list' %}" class="btn btn-primary">
+                                <i class="fas fa-refresh"></i> Попробовать снова
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleItem(itemId) {
+    const checkbox = document.getElementById('item_' + itemId);
+    checkbox.checked = !checkbox.checked;
+    updateSelection();
+}
+
+function updateSelection() {
+    const checkboxes = document.querySelectorAll('input[name="item_ids"]:checked');
+    const count = checkboxes.length;
+    
+    // Обновляем счетчик
+    document.getElementById('selectedCount').textContent = count;
+    
+    // Обновляем состояние кнопки
+    const compareBtn = document.getElementById('compareBtn');
+    compareBtn.disabled = count < 2;
+    
+    if (count >= 2) {
+        compareBtn.innerHTML = '<i class="fas fa-balance-scale"></i> Сравнить ' + count + ' товара';
+    } else {
+        compareBtn.innerHTML = '<i class="fas fa-balance-scale"></i> Сравнить выбранные товары';
+    }
+    
+    // Обновляем стили карточек
+    document.querySelectorAll('.item-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    
+    checkboxes.forEach(checkbox => {
+        const card = checkbox.closest('.item-card');
+        card.classList.add('selected');
+    });
+}
+
+// Предотвращаем всплытие события при клике на чекбокс
+document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+});
+
+// Инициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    updateSelection();
+});
+</script>
+{% endblock %}

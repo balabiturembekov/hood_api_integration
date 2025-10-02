@@ -60,6 +60,20 @@
                         <i class="fas fa-box"></i> Продукты
                     </a>
                     
+                    <!-- Заказы -->
+                    <div class="mt-3">
+                        <h6 class="text-muted">Заказы</h6>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'orders_list' %}active{% endif %}" href="{% url 'orders_list' %}">
+                            <i class="fas fa-shopping-cart"></i> Список заказов
+                        </a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'sync_orders' %}active{% endif %}" href="{% url 'sync_orders' %}">
+                            <i class="fas fa-sync"></i> Синхронизация
+                        </a>
+                        <a class="nav-link {% if request.resolver_match.url_name == 'orders_stats' %}active{% endif %}" href="{% url 'orders_stats' %}">
+                            <i class="fas fa-chart-bar"></i> Статистика
+                        </a>
+                    </div>
+
                     <!-- Hood.de API функции -->
                     <div class="mt-3">
                         <h6 class="text-muted">Hood.de API</h6>
